@@ -33,6 +33,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_payment_callback(update, context)
     elif callback_data == "main:home":
         await start_command_from_callback(query, context)
+    elif callback_data == "main:wallet_management":
+        await handle_wallet_management(update, context)
+    elif callback_data.startswith("wallet:"):
+        await handle_wallet_callback(update, context)
     else:
         # 未实现的功能
         await query.answer(f"功能开发中：{callback_data}")
@@ -243,6 +247,286 @@ async def handle_balance_query_callback(update: Update, context: ContextTypes.DE
         # 调用start_command显示主菜单
         await start_command_from_callback(query, context)
 
+async def handle_wallet_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理钱包管理主页面"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    await query.answer()
+    
+    # 获取用户的钱包地址列表
+    from models import get_wallet_addresses
+    user_addresses = get_wallet_addresses(user_id)
+    
+    if not user_addresses:
+        text = """🏦 钱包管理
+
+您还没有绑定任何钱包地址。
+
+请添加您的TRON钱包地址："""
+        keyboard = [
+            [InlineKeyboardButton("➕ 添加新地址", callback_data="wallet:add")],
+            [InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")]
+        ]
+    else:
+        text = f"""🏦 钱包管理
+
+📊 共有 {len(user_addresses)} 个钱包地址
+
+地址列表："""
+        
+        keyboard = []
+        for i, addr in enumerate(user_addresses):
+            short_addr = f"{addr[:8]}...{addr[-6:]}"
+            keyboard.append([
+                InlineKeyboardButton(f"📍 {short_addr}", callback_data=f"wallet:view:{i}"),
+                InlineKeyboardButton("❌", callback_data=f"wallet:delete:{i}")
+            ])
+        
+        keyboard.extend([
+            [InlineKeyboardButton("➕ 添加新地址", callback_data="wallet:add")],
+            [InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")]
+        ])
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+async def handle_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理钱包相关回调"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    callback_data = query.data
+    
+    await query.answer()
+    
+    if callback_data == "wallet:add":
+        # 添加新地址
+        session = get_user_session(user_id)
+        session.pending_input = "wallet_new_address"
+        
+        prompt_text = """➕ 添加新的TRON钱包地址
+
+请发送您的TRON钱包地址：
+
+📝 地址格式示例：
+`TQ5kjKLLm9X4L2D1JgogNis6V1YoAm6sv2`
+
+⚠️ 请确保地址正确。"""
+        
+        prompt_keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ 取消", callback_data="wallet:cancel_add")
+        ]])
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=prompt_text,
+            reply_markup=prompt_keyboard,
+            parse_mode='Markdown'
+        )
+        
+    elif callback_data.startswith("wallet:view:"):
+        # 查看地址详情
+        addr_index = int(callback_data.split(":")[-1])
+        from models import get_wallet_addresses
+        user_addresses = get_wallet_addresses(user_id)
+        
+        if addr_index < len(user_addresses):
+            address = user_addresses[addr_index]
+            await show_address_details(query, context, address)
+        else:
+            await query.answer("地址索引无效", show_alert=True)
+            
+    elif callback_data.startswith("wallet:delete:"):
+        # 删除地址确认
+        addr_index = int(callback_data.split(":")[-1])
+        from models import get_wallet_addresses
+        user_addresses = get_wallet_addresses(user_id)
+        
+        if addr_index < len(user_addresses):
+            address = user_addresses[addr_index]
+            short_addr = f"{address[:8]}...{address[-6:]}"
+            
+            text = f"""⚠️ 删除地址确认
+
+确定要删除以下地址吗？
+
+📍 {short_addr}
+`{address}`
+
+⚠️ 此操作无法撤销！"""
+            
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ 确认删除", callback_data=f"wallet:confirm_delete:{addr_index}"),
+                    InlineKeyboardButton("❌ 取消", callback_data="wallet:back")
+                ]
+            ])
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        else:
+            await query.answer("地址索引无效", show_alert=True)
+            
+    elif callback_data.startswith("wallet:confirm_delete:"):
+        # 确认删除地址
+        addr_index = int(callback_data.split(":")[-1])
+        from models import get_wallet_addresses, remove_wallet_address
+        user_addresses = get_wallet_addresses(user_id)
+        
+        if addr_index < len(user_addresses):
+            address = user_addresses[addr_index]
+            if remove_wallet_address(user_id, address):
+                await query.answer("✅ 地址已删除", show_alert=True)
+                # 返回钱包管理页面
+                await handle_wallet_management(update, context)
+            else:
+                await query.answer("❌ 删除失败", show_alert=True)
+        else:
+            await query.answer("地址索引无效", show_alert=True)
+            
+    elif callback_data == "wallet:back":
+        # 返回钱包管理主页面
+        await handle_wallet_management(update, context)
+        
+    elif callback_data == "wallet:cancel_add":
+        # 取消添加新地址
+        session = get_user_session(user_id)
+        session.pending_input = None
+        await query.delete_message()
+        
+    elif callback_data.startswith("wallet:refresh:"):
+        # 刷新地址余额
+        address = callback_data.split(":", 2)[-1]  # 获取完整地址
+        await refresh_wallet_address_balance(query, context, address)
+
+async def show_address_details(query, context, address):
+    """显示地址详情"""
+    user_id = query.from_user.id
+    
+    # 先显示基本信息
+    short_addr = f"{address[:8]}...{address[-6:]}"
+    text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+🔄 正在查询余额信息..."""
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 刷新余额", callback_data=f"wallet:refresh:{address}"),
+            InlineKeyboardButton("⬅️ 返回", callback_data="wallet:back")
+        ]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    
+    # 异步查询余额
+    try:
+        from tron_api import TronAPI
+        import os
+        api = TronAPI(
+            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            api_key=os.getenv('TRON_API_KEY')
+        )
+        
+        balance = api.get_account_balance(address)
+        
+        if balance:
+            text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+💰 余额信息:
+TRX: {balance.trx_balance:.6f}
+ENERGY: {balance.energy_available:,}
+BANDWIDTH: {balance.bandwidth_available:,}"""
+        else:
+            text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+❌ 地址可能未激活或网络异常
+💡 新地址需要先接收至少0.1 TRX才会被激活"""
+            
+    except Exception as e:
+        text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+❌ 查询余额时发生错误
+请稍后重试"""
+    
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+async def refresh_wallet_address_balance(query, context, address):
+    """刷新钱包地址余额"""
+    user_id = query.from_user.id
+    
+    # 显示刷新中的消息
+    short_addr = f"{address[:8]}...{address[-6:]}"
+    loading_text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+🔄 正在刷新余额信息..."""
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 刷新余额", callback_data=f"wallet:refresh:{address}"),
+            InlineKeyboardButton("⬅️ 返回", callback_data="wallet:back")
+        ]
+    ])
+    
+    await query.edit_message_text(loading_text, reply_markup=keyboard, parse_mode='Markdown')
+    
+    # 异步查询余额
+    try:
+        from tron_api import TronAPI
+        import os
+        api = TronAPI(
+            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            api_key=os.getenv('TRON_API_KEY')
+        )
+        
+        balance = api.get_account_balance(address)
+        
+        if balance:
+            text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+💰 余额信息:
+TRX: {balance.trx_balance:.6f}
+ENERGY: {balance.energy_available:,}
+BANDWIDTH: {balance.bandwidth_available:,}
+
+🕒 最后更新: 刚刚"""
+        else:
+            text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+❌ 地址可能未激活或网络异常
+💡 新地址需要先接收至少0.1 TRX才会被激活
+
+🕒 最后更新: 刚刚"""
+            
+    except Exception as e:
+        text = f"""📍 钱包地址详情
+
+地址: {short_addr}
+`{address}`
+
+❌ 查询余额时发生错误
+请稍后重试
+
+🕒 最后更新: 刚刚"""
+    
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理文本消息（用于用户输入）"""
     user_id = update.effective_user.id
@@ -290,6 +574,48 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 text_content = generate_buy_energy_text(user_id)
                 keyboard = generate_buy_energy_keyboard(user_id)
                 await update.message.reply_text(text_content, reply_markup=keyboard, parse_mode='Markdown')
+            else:
+                # 地址已存在
+                await update.message.reply_text(f"ℹ️ 地址已存在：`{text[:6]}...{text[-6:]}`\n\n请输入其他地址或点击取消。", parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ 地址格式无效！\n\n请输入有效的TRON地址（以T开头，34个字符）")
+    
+    elif session.pending_input == "wallet_new_address":
+        # 处理钱包管理中的新地址输入
+        from models import add_wallet_address, is_valid_tron_address
+        
+        if is_valid_tron_address(text):
+            # 地址格式有效，尝试添加
+            if add_wallet_address(user_id, text):
+                # 添加成功
+                session.pending_input = None
+                
+                await update.message.reply_text(f"✅ 地址添加成功：`{text[:6]}...{text[-6:]}`", parse_mode='Markdown')
+                
+                # 发送新的钱包管理页面
+                from models import get_wallet_addresses
+                user_addresses = get_wallet_addresses(user_id)
+                
+                text_content = f"""🏦 钱包管理
+
+📊 共有 {len(user_addresses)} 个钱包地址
+
+地址列表："""
+                
+                keyboard = []
+                for i, addr in enumerate(user_addresses):
+                    short_addr = f"{addr[:8]}...{addr[-6:]}"
+                    keyboard.append([
+                        InlineKeyboardButton(f"📍 {short_addr}", callback_data=f"wallet:view:{i}"),
+                        InlineKeyboardButton("❌", callback_data=f"wallet:delete:{i}")
+                    ])
+                
+                keyboard.extend([
+                    [InlineKeyboardButton("➕ 添加新地址", callback_data="wallet:add")],
+                    [InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")]
+                ])
+                
+                await update.message.reply_text(text_content, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
             else:
                 # 地址已存在
                 await update.message.reply_text(f"ℹ️ 地址已存在：`{text[:6]}...{text[-6:]}`\n\n请输入其他地址或点击取消。", parse_mode='Markdown')
@@ -386,6 +712,9 @@ async def start_command_from_callback(query, context: ContextTypes.DEFAULT_TYPE)
         [
             InlineKeyboardButton("🤝 Paymaster（能量代付）", callback_data="main:paymaster"),
             InlineKeyboardButton("📊 Market Price（行情）", callback_data="main:market_price"),
+        ],
+        [
+            InlineKeyboardButton("🏦 钱包管理", callback_data="main:wallet_management"),
         ]
     ]
     
@@ -420,6 +749,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton("🤝 Paymaster（能量代付）", callback_data="main:paymaster"),
             InlineKeyboardButton("📊 Market Price（行情）", callback_data="main:market_price"),
+        ],
+        [
+            InlineKeyboardButton("🏦 钱包管理", callback_data="main:wallet_management"),
         ]
     ]
     

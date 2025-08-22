@@ -1,4 +1,7 @@
 import logging
+import json
+import os
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +17,51 @@ class UserSession:
         self.wallet_addresses = []  # 用户绑定的钱包地址列表
         self.show_balance_in_buy_page = False  # 是否在购买页面显示余额信息
 
-# 用户会话状态存储
+# 用户会话状态存储（内存）
 user_sessions = {}
+
+# 持久化存储配置
+WALLET_DATA_FILE = "user_wallets.json"
+
+def load_wallet_data() -> Dict:
+    """从文件加载钱包数据"""
+    if os.path.exists(WALLET_DATA_FILE):
+        try:
+            with open(WALLET_DATA_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"加载钱包数据失败: {e}")
+            return {}
+    return {}
+
+def save_wallet_data(data: Dict) -> bool:
+    """保存钱包数据到文件"""
+    try:
+        with open(WALLET_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except IOError as e:
+        logger.error(f"保存钱包数据失败: {e}")
+        return False
+
+def get_user_wallet_data(user_id: int) -> List[str]:
+    """获取用户的持久化钱包地址列表"""
+    wallet_data = load_wallet_data()
+    return wallet_data.get(str(user_id), [])
+
+def save_user_wallet_data(user_id: int, addresses: List[str]) -> bool:
+    """保存用户的钱包地址列表"""
+    wallet_data = load_wallet_data()
+    wallet_data[str(user_id)] = addresses
+    return save_wallet_data(wallet_data)
 
 def get_user_session(user_id: int) -> UserSession:
     """获取或创建用户会话"""
     if user_id not in user_sessions:
         user_sessions[user_id] = UserSession()
+        # 从持久化存储加载钱包地址
+        persistent_addresses = get_user_wallet_data(user_id)
+        user_sessions[user_id].wallet_addresses = persistent_addresses
     return user_sessions[user_id]
 
 def add_wallet_address(user_id: int, address: str) -> bool:
@@ -34,6 +75,8 @@ def add_wallet_address(user_id: int, address: str) -> bool:
     # 检查是否已存在
     if address not in session.wallet_addresses:
         session.wallet_addresses.append(address)
+        # 保存到持久化存储
+        save_user_wallet_data(user_id, session.wallet_addresses)
         logger.info(f"用户 {user_id} 添加地址: {address}")
         return True
     return False
@@ -46,6 +89,8 @@ def remove_wallet_address(user_id: int, address: str) -> bool:
         # 如果删除的是当前选中的地址，清空选择
         if session.selected_address == address:
             session.selected_address = None
+        # 保存到持久化存储
+        save_user_wallet_data(user_id, session.wallet_addresses)
         logger.info(f"用户 {user_id} 删除地址: {address}")
         return True
     return False
