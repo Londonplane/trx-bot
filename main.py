@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from config import BOT_TOKEN
 from models import get_user_session, format_energy
@@ -53,7 +53,7 @@ async def handle_address_callback(update: Update, context: ContextTypes.DEFAULT_
         # 返回闪租页
         text = generate_buy_energy_text(user_id)
         keyboard = generate_buy_energy_keyboard(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
         
     elif callback_data == "address:new":
         # 添加新地址
@@ -67,14 +67,15 @@ async def handle_address_callback(update: Update, context: ContextTypes.DEFAULT_
         await context.bot.send_message(
             chat_id=user_id,
             text=prompt_text,
-            reply_markup=prompt_keyboard
+            reply_markup=prompt_keyboard,
+            parse_mode='Markdown'
         )
         
     elif callback_data == "address:back":
         # 返回闪租页
         text = generate_buy_energy_text(user_id)
         keyboard = generate_buy_energy_keyboard(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
         
     elif callback_data == "address:cancel_new":
         # 取消添加新地址
@@ -112,13 +113,13 @@ async def handle_payment_callback(update: Update, context: ContextTypes.DEFAULT_
             InlineKeyboardButton("📋 查看订单", callback_data="main:orders")
         ]])
         
-        await query.edit_message_text(success_text, reply_markup=keyboard)
+        await query.edit_message_text(success_text, reply_markup=keyboard, parse_mode='Markdown')
         
     elif callback_data == "buy_energy:back":
         # 返回闪租页
         text = generate_buy_energy_text(user_id)
         keyboard = generate_buy_energy_keyboard(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理文本消息（用于用户输入）"""
@@ -145,7 +146,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # 简单起见，我们发送新的卡片
             text_content = generate_buy_energy_text(user_id)
             keyboard = generate_buy_energy_keyboard(user_id)
-            await update.message.reply_text(text_content, reply_markup=keyboard)
+            await update.message.reply_text(text_content, reply_markup=keyboard, parse_mode='Markdown')
             
         except ValueError:
             await update.message.reply_text("❌ 请输入有效的整数")
@@ -162,7 +163,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # 发送新的闪租卡片
             text_content = generate_buy_energy_text(user_id)
             keyboard = generate_buy_energy_keyboard(user_id)
-            await update.message.reply_text(text_content, reply_markup=keyboard)
+            await update.message.reply_text(text_content, reply_markup=keyboard, parse_mode='Markdown')
         else:
             await update.message.reply_text("❌ 请输入有效的TRON地址（以T开头，34个字符）")
 
@@ -200,11 +201,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
         logger.info(f"成功发送回复给用户 {user_id}")
     except Exception as e:
         logger.error(f"发送消息失败: {e}")
         print(f"发送消息错误: {e}")
+
+async def setup_bot_commands(application):
+    """设置机器人菜单命令"""
+    commands = [
+        BotCommand("start", "启动机器人并显示主菜单")
+    ]
+    await application.bot.set_my_commands(commands)
 
 def main():
     """主函数"""
@@ -215,6 +223,12 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    # 设置机器人菜单命令
+    async def post_init(application):
+        await setup_bot_commands(application)
+    
+    application.post_init = post_init
     
     # 启动Bot
     print("Bot正在启动...")

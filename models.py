@@ -4,12 +4,13 @@ logger = logging.getLogger(__name__)
 
 class UserSession:
     def __init__(self):
-        self.selected_duration = "1d"  # 默认选择1天
-        self.selected_energy = "135K"  # 默认选择135K
+        self.selected_duration = "1h"  # 默认选择1小时
+        self.selected_energy = "65K"  # 默认选择65K
         self.selected_address = None
         self.computed_cost = "0.00"
-        self.user_balance = {"TRX": "100.00", "USDT": "50.00"}  # Mock数据
+        self.user_balance = {"TRX": "20.000", "USDT": "50.00"}  # Mock数据
         self.pending_input = None  # 用于跟踪等待的用户输入类型
+        self.address_balance = None  # 存储地址余额信息 {"TRX": "18.900009", "ENERGY": "0"}
 
 # 用户会话状态存储
 user_sessions = {}
