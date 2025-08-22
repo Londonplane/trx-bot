@@ -1,7 +1,9 @@
 import asyncio
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from models import get_user_session, calculate_mock_cost, format_energy
+from models import get_user_session, calculate_mock_cost, format_energy, get_wallet_addresses, add_wallet_address
+from tron_api import TronAPI
 
 def generate_buy_energy_text(user_id: int) -> str:
     """生成闪租页文本内容"""
@@ -60,7 +62,12 @@ def generate_buy_energy_text(user_id: int) -> str:
         if hasattr(session, 'address_balance') and session.address_balance:
             address_section += f"ℹ️ Address balance:\n"
             address_section += f"TRX: {session.address_balance.get('TRX', '0')}\n"
-            address_section += f"ENERGY: {session.address_balance.get('ENERGY', '0')}\n\n"
+            address_section += f"ENERGY: {session.address_balance.get('ENERGY', '0')}\n"
+            # 显示带宽信息（如果有的话）
+            bandwidth = session.address_balance.get('BANDWIDTH')
+            if bandwidth and bandwidth != '0':
+                address_section += f"BANDWIDTH: {bandwidth}\n"
+            address_section += "\n"
     
     # 成本计算部分
     cost_section = f"""⚡️ Amount: {energy_display}
@@ -218,24 +225,43 @@ async def show_address_selection(query, context):
     """显示地址选择界面"""
     user_id = query.from_user.id
     
-    # Mock地址列表
-    mock_addresses = [
-        "TRX9Uhjn948ynC8J2LRRHVpbdYT6GKRTLz",
-        "TBrLXQs4q2XQ29dGFbyiTCcvXuN2tGJvSK", 
-        "TNRLJjF9uGp2gZMZVQWcJSkbKnH7wdvGRw"
-    ]
+    # 获取用户的钱包地址列表
+    user_addresses = get_wallet_addresses(user_id)
     
-    text = "选择用于接收能量的地址："
-    
-    keyboard = []
-    for i, addr in enumerate(mock_addresses):
-        short_addr = f"{addr[:6]}...{addr[-4:]}"
-        keyboard.append([InlineKeyboardButton(f"📍 {short_addr}", callback_data=f"address:select:{i}")])
-    
-    keyboard.append([
-        InlineKeyboardButton("➕ 添加新地址", callback_data="address:new"),
-        InlineKeyboardButton("⬅️ 返回", callback_data="address:back")
-    ])
+    if not user_addresses:
+        # 用户还没有绑定地址
+        text = """🏠 钱包地址管理
+
+您还没有绑定任何钱包地址。
+
+请添加您的TRON钱包地址来接收能量："""
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ 添加新地址", callback_data="address:new")],
+            [InlineKeyboardButton("⬅️ 返回", callback_data="address:back")]
+        ]
+    else:
+        # 显示用户的地址列表
+        text = f"""🏠 钱包地址管理
+
+请选择用于接收能量的地址：
+
+📊 共有 {len(user_addresses)} 个地址"""
+        
+        keyboard = []
+        for i, addr in enumerate(user_addresses):
+            short_addr = f"{addr[:6]}...{addr[-4:]}"
+            # 如果是当前选中的地址，添加标记
+            if addr == get_user_session(user_id).selected_address:
+                button_text = f"✅ {short_addr}"
+            else:
+                button_text = f"📍 {short_addr}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"address:select:{i}")])
+        
+        keyboard.extend([
+            [InlineKeyboardButton("➕ 添加新地址", callback_data="address:new")],
+            [InlineKeyboardButton("⬅️ 返回", callback_data="address:back")]
+        ])
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
@@ -248,32 +274,52 @@ async def refresh_address_balance(query, context):
         await query.answer("请先选择一个地址！", show_alert=True)
         return
     
-    # 发送独立的更新余额消息
+    # 显示更新提示消息
     updating_message = await context.bot.send_message(
         chat_id=user_id,
         text="🔄 Updating balance…"
     )
     
-    # 模拟异步查询（实际中这里会调用TRON API）
-    import random
-    await asyncio.sleep(1)  # 模拟网络延迟
+    try:
+        # 创建API客户端
+        api = TronAPI(
+            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            api_key=os.getenv('TRON_API_KEY')
+        )
+        
+        # 查询余额
+        balance = api.get_account_balance(session.selected_address)
+        
+        if balance:
+            # 更新会话中的余额信息，包含带宽
+            session.address_balance = {
+                'TRX': f"{balance.trx_balance:.6f}",
+                'ENERGY': f"{balance.energy_available:,}",
+                'BANDWIDTH': f"{balance.bandwidth_available:,}"
+            }
+            
+            # 重新生成页面
+            text = generate_buy_energy_text(user_id)
+            keyboard = generate_buy_energy_keyboard(user_id)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+            
+        else:
+            # 查询失败，但不设置为Error，而是提示用户
+            await query.answer("余额查询失败，地址可能未激活或网络问题", show_alert=True)
+            
+    except Exception as e:
+        # 异常处理，提供详细错误信息
+        await query.answer(f"网络错误: {str(e)[:50]}...", show_alert=True)
     
-    # Mock更新地址余额数据
-    session.address_balance = {
-        "TRX": f"{random.uniform(15, 25):.6f}",
-        "ENERGY": str(random.randint(0, 100000))
-    }
-    
-    # 更新原始消息
-    text = generate_buy_energy_text(user_id)
-    keyboard = generate_buy_energy_keyboard(user_id)
-    await query.edit_message_text(text, reply_markup=keyboard)
-    
-    # 删除更新余额的临时消息
-    await context.bot.delete_message(
-        chat_id=user_id,
-        message_id=updating_message.message_id
-    )
+    finally:
+        # 删除更新提示消息
+        try:
+            await context.bot.delete_message(
+                chat_id=user_id,
+                message_id=updating_message.message_id
+            )
+        except Exception:
+            pass  # 忽略删除消息时的错误
 
 async def confirm_payment(query, context):
     """确认支付处理"""

@@ -11,6 +11,8 @@ class UserSession:
         self.user_balance = {"TRX": "20.000", "USDT": "50.00"}  # Mock数据
         self.pending_input = None  # 用于跟踪等待的用户输入类型
         self.address_balance = None  # 存储地址余额信息 {"TRX": "18.900009", "ENERGY": "0"}
+        self.wallet_addresses = []  # 用户绑定的钱包地址列表
+        self.show_balance_in_buy_page = False  # 是否在购买页面显示余额信息
 
 # 用户会话状态存储
 user_sessions = {}
@@ -20,6 +22,51 @@ def get_user_session(user_id: int) -> UserSession:
     if user_id not in user_sessions:
         user_sessions[user_id] = UserSession()
     return user_sessions[user_id]
+
+def add_wallet_address(user_id: int, address: str) -> bool:
+    """添加钱包地址"""
+    session = get_user_session(user_id)
+    
+    # 验证地址格式
+    if not is_valid_tron_address(address):
+        return False
+    
+    # 检查是否已存在
+    if address not in session.wallet_addresses:
+        session.wallet_addresses.append(address)
+        logger.info(f"用户 {user_id} 添加地址: {address}")
+        return True
+    return False
+
+def remove_wallet_address(user_id: int, address: str) -> bool:
+    """删除钱包地址"""
+    session = get_user_session(user_id)
+    if address in session.wallet_addresses:
+        session.wallet_addresses.remove(address)
+        # 如果删除的是当前选中的地址，清空选择
+        if session.selected_address == address:
+            session.selected_address = None
+        logger.info(f"用户 {user_id} 删除地址: {address}")
+        return True
+    return False
+
+def get_wallet_addresses(user_id: int) -> list:
+    """获取用户的钱包地址列表"""
+    session = get_user_session(user_id)
+    return session.wallet_addresses.copy()
+
+def is_valid_tron_address(address: str) -> bool:
+    """验证TRON地址格式"""
+    if not address:
+        return False
+    
+    # 基本格式检查
+    if address.startswith('T') and len(address) == 34:
+        return True
+    elif len(address) == 42 and address.startswith('41'):
+        return True
+    
+    return False
 
 def calculate_mock_cost(energy: str, duration: str) -> str:
     """模拟成本计算"""

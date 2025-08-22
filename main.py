@@ -1,10 +1,15 @@
 import logging
 import asyncio
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from config import BOT_TOKEN
+from dotenv import load_dotenv
+from tron_api import TronAPI
 from models import get_user_session, format_energy
 from buy_energy import handle_buy_energy_callback, generate_buy_energy_text, generate_buy_energy_keyboard
+
+# 加载环境变量
+load_dotenv()
 
 # 配置日志
 logging.basicConfig(
@@ -26,6 +31,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_address_callback(update, context)
     elif callback_data.startswith("payment:"):
         await handle_payment_callback(update, context)
+    elif callback_data == "main:home":
+        await start_command_from_callback(query, context)
     else:
         # 未实现的功能
         await query.answer(f"功能开发中：{callback_data}")
@@ -41,28 +48,38 @@ async def handle_address_callback(update: Update, context: ContextTypes.DEFAULT_
     if callback_data.startswith("address:select:"):
         # 选择地址
         addr_index = int(callback_data.split(":")[-1])
-        mock_addresses = [
-            "TRX9Uhjn948ynC8J2LRRHVpbdYT6GKRTLz",
-            "TBrLXQs4q2XQ29dGFbyiTCcvXuN2tGJvSK", 
-            "TNRLJjF9uGp2gZMZVQWcJSkbKnH7wdvGRw"
-        ]
-        
         session = get_user_session(user_id)
-        session.selected_address = mock_addresses[addr_index]
         
-        # 返回闪租页
-        text = generate_buy_energy_text(user_id)
-        keyboard = generate_buy_energy_keyboard(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        # 从用户的钱包地址列表中获取地址
+        from models import get_wallet_addresses
+        user_addresses = get_wallet_addresses(user_id)
+        
+        if addr_index < len(user_addresses):
+            session.selected_address = user_addresses[addr_index]
+            
+            # 返回闪租页
+            text = generate_buy_energy_text(user_id)
+            keyboard = generate_buy_energy_keyboard(user_id)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        else:
+            await query.answer("地址索引无效", show_alert=True)
         
     elif callback_data == "address:new":
         # 添加新地址
         session = get_user_session(user_id)
         session.pending_input = "new_address"
         
-        prompt_text = "请发送新的TRON地址用于接收能量："
+        prompt_text = """➕ 添加新的TRON钱包地址
+
+请发送您的TRON钱包地址用于接收能量：
+
+📝 地址格式示例：
+`TQ5kjKLLm9X4L2D1JgogNis6V1YoAm6sv2`
+
+⚠️ 请确保地址正确，错误的地址可能导致能量丢失。"""
+        
         prompt_keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("取消", callback_data="address:cancel_new")
+            InlineKeyboardButton("❌ 取消", callback_data="address:cancel_new")
         ]])
         await context.bot.send_message(
             chat_id=user_id,
@@ -121,6 +138,111 @@ async def handle_payment_callback(update: Update, context: ContextTypes.DEFAULT_
         keyboard = generate_buy_energy_keyboard(user_id)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
+async def handle_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理余额查询回调"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    await query.answer()
+    
+    # 获取用户会话
+    session = get_user_session(user_id)
+    
+    # 检查用户是否已选择地址
+    if not hasattr(session, 'selected_address') or not session.selected_address:
+        # 用户还没有选择地址，提示选择
+        error_msg = """❌ 请先选择钱包地址
+
+请点击"Receive Address"选择您的钱包地址，然后再查询余额。"""
+        
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")
+        ]])
+        
+        await query.edit_message_text(error_msg, reply_markup=keyboard, parse_mode='Markdown')
+        return
+    
+    address = session.selected_address
+    
+    # 显示查询中的消息
+    loading_text = f"""🔍 正在查询地址余额...
+
+📍 查询地址: `{address[:6]}...{address[-6:]}`
+
+请稍候..."""
+    await query.edit_message_text(loading_text, parse_mode='Markdown')
+    
+    try:
+        # 创建API客户端并查询余额
+        api = TronAPI(
+            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            api_key=os.getenv('TRON_API_KEY')
+        )
+        
+        # 查询余额
+        balance = api.get_account_balance(address)
+        
+        if balance:
+            # 查询成功，显示结果
+            message = api.format_balance_message(balance)
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 刷新余额", callback_data="main:balance"),
+                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
+            ]])
+            
+            await query.edit_message_text(message, reply_markup=keyboard, parse_mode='Markdown')
+            
+        else:
+            # 查询失败
+            error_msg = f"""❌ 余额查询失败
+
+📍 查询地址: `{address}`
+
+可能的原因：
+• 地址尚未激活（需要先接收一次TRX转账）
+• 网络连接问题
+• API服务暂时不可用
+
+💡 提示：新地址需要先接收至少0.1 TRX才会被激活。"""
+            
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
+                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
+            ]])
+            
+            await query.edit_message_text(error_msg, reply_markup=keyboard, parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"余额查询异常: {e}")
+        await query.edit_message_text(
+            f"""❌ 查询过程中发生错误
+
+📍 查询地址: `{address}`
+
+请稍后重试，或检查地址是否正确。""",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
+                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
+            ]]),
+            parse_mode='Markdown'
+        )
+
+async def handle_balance_query_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理余额查询相关回调"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    callback_data = query.data
+    
+    await query.answer()
+    
+    if callback_data == "balance:cancel":
+        # 取消余额查询，返回主菜单
+        session = get_user_session(user_id)
+        session.pending_input = None
+        
+        # 调用start_command显示主菜单
+        await start_command_from_callback(query, context)
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理文本消息（用于用户输入）"""
     user_id = update.effective_user.id
@@ -153,19 +275,122 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     elif session.pending_input == "new_address":
         # 处理新地址输入
-        if len(text) == 34 and text.startswith('T'):
-            # 简单的地址格式验证
-            session.selected_address = text
+        from models import add_wallet_address, is_valid_tron_address
+        
+        if is_valid_tron_address(text):
+            # 地址格式有效，尝试添加
+            if add_wallet_address(user_id, text):
+                # 添加成功，自动选择这个地址
+                session.selected_address = text
+                session.pending_input = None
+                
+                await update.message.reply_text(f"✅ 地址添加成功：`{text[:6]}...{text[-6:]}`\n\n🎯 已自动选择此地址用于接收能量。", parse_mode='Markdown')
+                
+                # 发送新的闪租卡片
+                text_content = generate_buy_energy_text(user_id)
+                keyboard = generate_buy_energy_keyboard(user_id)
+                await update.message.reply_text(text_content, reply_markup=keyboard, parse_mode='Markdown')
+            else:
+                # 地址已存在
+                await update.message.reply_text(f"ℹ️ 地址已存在：`{text[:6]}...{text[-6:]}`\n\n请输入其他地址或点击取消。", parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ 地址格式无效！\n\n请输入有效的TRON地址（以T开头，34个字符）")
+    
+    
+    elif session.pending_input == "balance_query":
+        # 处理余额查询地址输入
+        await handle_balance_query(update, context, text)
+
+async def handle_balance_query(update: Update, context: ContextTypes.DEFAULT_TYPE, address: str):
+    """处理余额查询"""
+    user_id = update.effective_user.id
+    session = get_user_session(user_id)
+    
+    # 验证地址格式
+    api = TronAPI(
+        api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+        api_key=os.getenv('TRON_API_KEY')
+    )
+    
+    if not api.is_valid_address(address):
+        await update.message.reply_text("❌ 地址格式无效，请输入正确的TRON地址")
+        return
+    
+    # 显示查询中的消息
+    query_msg = await update.message.reply_text("🔍 正在查询地址余额，请稍候...")
+    
+    try:
+        # 查询余额
+        balance = api.get_account_balance(address)
+        
+        if balance:
+            # 查询成功，显示结果
+            message = api.format_balance_message(balance)
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 重新查询", callback_data="main:balance"),
+                InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")
+            ]])
+            
+            await query_msg.edit_text(message, reply_markup=keyboard, parse_mode='Markdown')
+            
+            # 清理用户输入状态
             session.pending_input = None
             
-            await update.message.reply_text(f"✅ 已添加地址：{text[:6]}...{text[-4:]}")
-            
-            # 发送新的闪租卡片
-            text_content = generate_buy_energy_text(user_id)
-            keyboard = generate_buy_energy_keyboard(user_id)
-            await update.message.reply_text(text_content, reply_markup=keyboard, parse_mode='Markdown')
         else:
-            await update.message.reply_text("❌ 请输入有效的TRON地址（以T开头，34个字符）")
+            # 查询失败
+            error_msg = f"""❌ 查询失败
+
+可能的原因：
+• 地址不存在或未激活
+• 网络连接问题
+• API服务暂时不可用
+
+请检查地址是否正确：`{address}`"""
+            
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
+                InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")
+            ]])
+            
+            await query_msg.edit_text(error_msg, reply_markup=keyboard, parse_mode='Markdown')
+            session.pending_input = None
+            
+    except Exception as e:
+        logger.error(f"余额查询异常: {e}")
+        await query_msg.edit_text(
+            "❌ 查询过程中发生错误，请稍后重试",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
+                InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")
+            ]])
+        )
+        session.pending_input = None
+
+async def start_command_from_callback(query, context: ContextTypes.DEFAULT_TYPE):
+    """从回调中调用start命令（用于返回主菜单）"""
+    text = """🔋 TRON 能量助手
+
+快速租能量、计次套餐、余额充值与代付，一站式完成
+
+请选择一个操作开始："""
+
+    keyboard = [
+        [
+            InlineKeyboardButton("⚡ Buy Energy（闪租）", callback_data="main:buy_energy"),
+            InlineKeyboardButton("📦 Packages（笔数套餐）", callback_data="main:packages"),
+        ],
+        [
+            InlineKeyboardButton("🧮 Calculator（能量计算器）", callback_data="main:calculator"),
+            InlineKeyboardButton("💰 Top Up（余额充值）", callback_data="main:top_up"),
+        ],
+        [
+            InlineKeyboardButton("🤝 Paymaster（能量代付）", callback_data="main:paymaster"),
+            InlineKeyboardButton("📊 Market Price（行情）", callback_data="main:market_price"),
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理/start命令"""
@@ -216,8 +441,23 @@ async def setup_bot_commands(application):
 
 def main():
     """主函数"""
-    # 使用配置文件中的Bot Token
-    application = Application.builder().token(BOT_TOKEN).build()
+    # 首先尝试从环境变量获取Bot Token
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    
+    # 如果环境变量没有，尝试从config.py获取
+    if not bot_token:
+        try:
+            from config import BOT_TOKEN
+            bot_token = BOT_TOKEN
+            print("使用config.py中的Bot Token")
+        except ImportError:
+            pass
+    
+    if not bot_token:
+        raise ValueError("请在.env文件中设置TELEGRAM_BOT_TOKEN环境变量，或在config.py中设置BOT_TOKEN")
+    
+    # 使用获取到的Bot Token
+    application = Application.builder().token(bot_token).build()
     
     # 添加处理器
     application.add_handler(CommandHandler("start", start_command))
@@ -233,9 +473,12 @@ def main():
     # 启动Bot
     print("Bot正在启动...")
     try:
-        application.run_polling(drop_pending_updates=True)
+        application.run_polling(drop_pending_updates=True, close_loop=False)
     except KeyboardInterrupt:
         print("Bot已停止")
+    except Exception as e:
+        print(f"启动错误: {e}")
+        print("请确保没有其他Bot实例在运行")
 
 if __name__ == "__main__":
     main()

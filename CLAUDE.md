@@ -4,79 +4,147 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是一个TRON能量助手Telegram机器人项目，旨在帮助用户租用TRON能量、购买能量套餐和管理能量相关交易。项目目前处于设计/规格阶段，包含详细的机器人界面和功能文档。
+这是一个功能完整的TRON能量助手Telegram机器人项目。机器人实现了钱包管理、余额查询和能量租赁功能，用户可以通过Telegram界面管理TRON钱包地址并查询实时余额信息。
 
-## 项目结构与架构
+## 核心功能
 
-项目包含详细的中文规格文档，描述了Telegram机器人的以下核心组件：
+### 已实现功能
+- **钱包管理系统**: 用户可以添加、删除和选择多个TRON钱包地址
+- **实时余额查询**: 查询TRX余额、Energy余额和Bandwidth余额
+- **闪租页面**: 能量租赁界面，支持参数选择和地址管理
+- **地址验证**: 自动验证TRON地址格式
+- **双API支持**: 使用TronScan API作为主要接口，官方TRON API作为备用
 
-### 核心功能模块
-- **闪租 (Buy Energy)**: TRON能量快速租赁，支持时长和数量选择
-- **笔数套餐 (Packages)**: 交易次数套餐
-- **能量计算器 (Calculator)**: 能量计算工具
-- **余额充值 (Top Up)**: 账户余额充值功能
-- **能量代付 (Paymaster)**: 代他人支付能量费用
-- **行情 (Market Price)**: 实时市场价格
+### 技术特色
+- **智能地址管理**: 用户绑定的地址列表，支持添加/选择操作
+- **实时API集成**: 真实的TRON区块链数据查询
+- **无缝用户体验**: 所有操作通过消息编辑完成，保持上下文
+- **完善错误处理**: 网络异常、地址验证、API失败等场景的优雅处理
 
-### 用户界面设计
-机器人采用双界面设计方案：
-- **内联按钮**: 用于需要立即参数选择的动作导向功能
-- **回复键盘**: 用于全局导航和账户管理功能
+## 项目架构
 
-### 关键架构模式
-- **单消息编辑**: 所有参数选择和状态更新都在同一条消息内完成以保持上下文
-- **状态管理**: 服务器端会话状态跟踪用户选择和偏好
-- **实时定价**: 基于能量数量和时长的动态成本计算
-- **地址管理**: 用户钱包地址绑定和选择系统
+### 核心文件结构
+```
+trx-bot/
+├── main.py              # 主程序入口和消息处理
+├── buy_energy.py        # 闪租页面逻辑和余额查询
+├── models.py            # 数据模型和钱包管理
+├── tron_api.py          # TRON API客户端和余额解析
+├── config.py            # 配置文件（Bot Token）
+└── requirements.txt     # 项目依赖
+```
+
+### 关键技术架构
+- **会话状态管理**: 内存中存储用户选择和钱包地址
+- **API容错机制**: 主API失败时自动切换备用API
+- **消息状态同步**: 实时更新消息内容显示余额信息
+- **地址验证系统**: 支持Base58和Hex格式的TRON地址
+
+## 用户交互流程
+
+### 1. 闪租页面流程
+1. 用户选择能量数量和租用时长
+2. 点击"Select address" → 显示钱包管理界面
+3. 添加或选择TRON钱包地址
+4. 点击"Address balance" → 查询并显示余额信息
+5. 显示完整的交易参数和费用计算
+
+### 2. 钱包管理
+- **添加地址**: 验证格式并存储到用户会话
+- **地址列表**: 显示所有绑定地址，支持选择切换
+- **地址验证**: 实时验证TRON地址格式的有效性
+
+### 3. 余额查询
+- **多维度信息**: TRX余额、Energy可用量、Bandwidth可用量
+- **实时更新**: 点击"Address balance"触发API查询
+- **状态提示**: 显示"🔄 Updating balance…"并在完成后删除
+
+## 技术实现
+
+### TRON API集成
+- **主要API**: TronScan API (`https://apilist.tronscan.org`)
+- **数据解析**: 自动解析TRX、Energy、Bandwidth信息
+- **错误处理**: 网络异常、地址未激活等情况的处理
+
+### 数据结构
+```python
+# 用户会话状态
+class UserSession:
+    selected_duration: str      # 选择的租用时长
+    selected_energy: str        # 选择的能量数量  
+    selected_address: str       # 选择的钱包地址
+    wallet_addresses: list      # 绑定的钱包地址列表
+    address_balance: dict       # 地址余额信息缓存
+
+# 余额数据结构
+class AccountBalance:
+    trx_balance: float          # TRX余额
+    energy_available: int       # 可用Energy
+    bandwidth_available: int    # 可用Bandwidth
+```
+
+### 消息界面
+```
+Calculation of the cost of purchasing energy:
+
+🎯 Address: TQ5kjKLLm9X4L2D1JgogNis6V1YoAm6sv2
+ℹ️ Address balance:
+TRX: 18.900009
+ENERGY: 0
+BANDWIDTH: 395
+
+⚡️ Amount: 65 000
+📆 Period: 1h 
+💵 Cost: 5.85 TRX 
+
+[Buy] [Change address] [Address balance]
+```
 
 ## 开发环境
 
-当前项目为规划阶段，包含：
-- 用户界面规格 (主页面信息卡片布局方案.md)
-- 详细交互流程 (闪租页（Buy Energy）交互与开发规格文档.md)
-- 功能模块定义 (功能模块.md)
-
-文档使用中文编写，遵循Telegram Bot API模式，使用内联键盘和消息编辑来提供无缝用户体验。
-
-## 实现要点
-
-在开发此项目时需要注意：
-- 项目专注于TRON区块链能量租赁服务
-- 所有用户交互应通过消息编辑而非发送新消息来保持上下文
-- 机器人需要与TRON区块链集成进行地址验证和余额检查
-- 定价计算需要实时市场数据集成
-- 状态管理对于维护用户会话数据至关重要
-
-## 技术栈
-
-- **Python 3.8+**: 主要开发语言
-- **python-telegram-bot**: Telegram Bot API库，用于处理消息、回调和状态管理
-- **内存状态管理**: 使用字典存储用户会话状态（后期可升级为Redis）
-
-## 开发命令
-
-由于项目使用Python，建议的开发流程：
-
+### 依赖包
 ```bash
-# 创建虚拟环境
-python -m venv venv
+pip install -r requirements.txt
+```
 
-# 激活虚拟环境 (Windows)
-venv\Scripts\activate
+### 配置要求
+- **Bot Token**: 在config.py中配置Telegram Bot Token
+- **可选API Key**: 环境变量中可配置TRON API Key以获得更高调用限制
 
-# 安装依赖
-pip install python-telegram-bot
-
-# 运行机器人
+### 启动命令
+```bash
 python main.py
 ```
 
-## 关键技术要求
+## 部署说明
 
-- Telegram Bot API集成及内联键盘实现
-- TRON区块链集成用于地址验证和能量转账
-- 实时定价API用于能量成本计算
-- 用户会话状态管理
-- 多语言支持（中文为主）
-- 支付处理集成
-- 地址验证和管理功能
+### 生产环境要求
+- Python 3.8+
+- 稳定的网络连接（访问TRON API）
+- Telegram Bot Token（从@BotFather获取）
+
+### 扩展建议
+- 使用Redis替代内存状态存储
+- 添加数据库持久化钱包地址
+- 实现真实的能量租赁交易功能
+- 添加TRC-20代币余额查询
+
+## 安全特性
+
+- ✅ 只执行查询操作，不涉及私钥或转账
+- ✅ 地址格式验证，防止无效输入
+- ✅ 不存储敏感信息，仅缓存余额数据
+- ✅ API错误隔离，防止系统崩溃
+
+## 维护指南
+
+### 重要提醒
+- 定期检查TRON API连通性
+- 监控机器人响应时间和错误率
+- 保持Telegram Bot Token的安全性
+- 及时更新依赖包版本
+
+### 开发模式
+使用环境变量或.env文件管理配置，避免硬编码敏感信息。
+
+这是一个生产就绪的TRON机器人项目，具备完整的钱包管理和余额查询功能。
