@@ -367,67 +367,84 @@ async def confirm_payment(query, context):
 
 async def process_successful_payment(query, context, session, cost: float):
     """处理成功支付流程"""
-    import uuid
-    import time
+    user_id = session.user_id
     
-    # 扣减用户余额
-    current_balance = float(session.user_balance['TRX'])
-    new_balance = current_balance - cost
-    session.user_balance['TRX'] = f"{new_balance:.3f}"
+    # 解析能量数量为整数
+    energy_amount = parse_energy_amount(session.selected_energy)
     
-    # 生成订单信息
-    session.last_order_id = str(uuid.uuid4())[:8].upper()
-    session.last_transaction_hash = f"0x{''.join([hex(ord(c))[2:] for c in session.last_order_id])}"[:66]
-    session.last_order_time = int(time.time())
+    # 调用后端API创建真实订单
+    order_result = session.create_order(
+        energy_amount=energy_amount,
+        duration=session.selected_duration,
+        receive_address=session.selected_address
+    )
     
-    # 格式化能量数量显示
-    energy_value = session.selected_energy
-    if energy_value.endswith("K"):
-        if energy_value == "65K":
-            energy_display = "65 000"
-        elif energy_value == "135K":
-            energy_display = "135 000"
-        elif energy_value == "270K":
-            energy_display = "270 000"
-        elif energy_value == "540K":
-            energy_display = "540 000"
-        else:
-            energy_display = energy_value
-    elif energy_value.endswith("M"):
-        if energy_value == "1M":
-            energy_display = "1 000 000"
-        else:
-            energy_display = energy_value
-    elif energy_value.isdigit():
-        val = int(energy_value)
-        energy_display = f"{val:,}".replace(",", " ")
-    else:
-        energy_display = energy_value
-    
-    # 创建成功消息
-    text = f"""✅ The transaction was successfully completed!
+    if order_result["success"]:
+        # 订单创建成功
+        order_data = order_result["order"]
+        session.last_order_id = order_data["id"]
+        session.last_transaction_hash = order_data.get("tx_hash", "pending")
+        
+        # 格式化能量数量显示
+        energy_display = format_energy_display(session.selected_energy)
+        
+        # 创建成功消息
+        text = f"""✅ The transaction was successfully completed!
 🎯 Address: {session.selected_address}
 ⚡ Quantity: {energy_display}
 📅 Duration: {session.selected_duration}
 💵 Cost: {cost:.2f} TRX
-💰 Balance: {new_balance:.3f} TRX
+🆔 Order ID: {order_data["id"][:8]}
+💰 Balance: {session.user_balance['TRX']} TRX
 
 Expect the energy to arrive in your wallet within a couple of minutes.
 ✅ Sent."""
-    
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("⚡ Buy more", callback_data="success:buy_more"),
-            InlineKeyboardButton("🔄 Check balance", callback_data="success:check_balance")
-        ]
-    ])
-    
-    # 发送成功消息
-    await context.bot.send_message(
-        chat_id=query.from_user.id,
-        text=text,
-        reply_markup=keyboard
-    )
+        
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("⚡ Buy more", callback_data="success:buy_more"),
+                InlineKeyboardButton("🔄 Check balance", callback_data="success:check_balance")
+            ]
+        ])
+        
+        # 发送成功消息
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=text,
+            reply_markup=keyboard
+        )
+    else:
+        # 订单创建失败
+        error_msg = order_result.get("message", "订单创建失败")
+        await query.answer(f"订单失败: {error_msg}", show_alert=True)
+
+def parse_energy_amount(energy_str: str) -> int:
+    """解析能量字符串为整数值"""
+    if energy_str.endswith("K"):
+        if energy_str == "65K":
+            return 65000
+        elif energy_str == "135K":
+            return 135000
+        elif energy_str == "270K":
+            return 270000
+        elif energy_str == "540K":
+            return 540000
+        else:
+            return int(float(energy_str[:-1]) * 1000)
+    elif energy_str.endswith("M"):
+        if energy_str == "1M":
+            return 1000000
+        else:
+            return int(float(energy_str[:-1]) * 1000000)
+    elif energy_str.isdigit():
+        return int(energy_str)
+    else:
+        return 65000  # 默认值
+
+def format_energy_display(energy_str: str) -> str:
+    """格式化能量显示"""
+    energy_amount = parse_energy_amount(energy_str)
+    return f"{energy_amount:,}".replace(",", " ")
 
 async def show_insufficient_balance_message(query, context, required_cost: float, current_balance: float):
     """显示余额不足消息"""

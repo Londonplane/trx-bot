@@ -2,16 +2,18 @@ import logging
 import json
 import os
 from typing import List, Dict
+from backend_api_client import backend_api
 
 logger = logging.getLogger(__name__)
 
 class UserSession:
-    def __init__(self):
+    def __init__(self, user_id: int = None):
+        self.user_id = user_id
         self.selected_duration = "1h"  # 默认选择1小时
         self.selected_energy = "65K"  # 默认选择65K
         self.selected_address = None
         self.computed_cost = "0.00"
-        self.user_balance = {"TRX": "20.000", "USDT": "50.00"}  # Mock数据
+        self._user_balance = None  # 缓存用户余额
         self.pending_input = None  # 用于跟踪等待的用户输入类型
         self.address_balance = None  # 存储地址余额信息 {"TRX": "18.900009", "ENERGY": "0"}
         self.wallet_addresses = []  # 用户绑定的钱包地址列表
@@ -20,6 +22,50 @@ class UserSession:
         self.last_order_id = None  # 最近一次订单ID
         self.last_transaction_hash = None  # 最近一次交易哈希
         self.last_order_time = None  # 最近一次订单时间
+    
+    @property
+    def user_balance(self) -> Dict[str, str]:
+        """获取用户余额（调用后端API）"""
+        if self.user_id is None:
+            return {"TRX": "0.000", "USDT": "0.00"}
+        
+        # 尝试从后端API获取真实余额
+        try:
+            balance_data = backend_api.get_user_balance(self.user_id)
+            if balance_data:
+                return {
+                    "TRX": f"{float(balance_data['balance_trx']):.3f}",
+                    "USDT": f"{float(balance_data['balance_usdt']):.2f}"
+                }
+        except Exception as e:
+            logger.warning(f"获取用户余额失败，使用Mock数据: {e}")
+        
+        # 后端API不可用时使用Mock数据
+        return {"TRX": "20.000", "USDT": "50.00"}
+    
+    def create_order(self, energy_amount: int, duration: str, receive_address: str) -> Dict:
+        """创建订单（调用后端API）"""
+        if self.user_id is None:
+            return {"success": False, "message": "用户ID未设置"}
+        
+        try:
+            order_data = backend_api.create_order(
+                user_id=self.user_id,
+                energy_amount=energy_amount,
+                duration=duration,
+                receive_address=receive_address
+            )
+            
+            if order_data:
+                self.last_order_id = order_data["id"]
+                self.last_transaction_hash = order_data.get("tx_hash")
+                return {"success": True, "order": order_data}
+            else:
+                return {"success": False, "message": "创建订单失败"}
+                
+        except Exception as e:
+            logger.error(f"创建订单异常: {e}")
+            return {"success": False, "message": str(e)}
 
 # 用户会话状态存储（内存）
 user_sessions = {}
@@ -62,10 +108,23 @@ def save_user_wallet_data(user_id: int, addresses: List[str]) -> bool:
 def get_user_session(user_id: int) -> UserSession:
     """获取或创建用户会话"""
     if user_id not in user_sessions:
-        user_sessions[user_id] = UserSession()
-        # 从持久化存储加载钱包地址
-        persistent_addresses = get_user_wallet_data(user_id)
-        user_sessions[user_id].wallet_addresses = persistent_addresses
+        user_sessions[user_id] = UserSession(user_id=user_id)
+        # 从后端API加载钱包地址，如果失败则使用本地文件
+        try:
+            wallets_data = backend_api.get_user_wallets(user_id)
+            if wallets_data:
+                user_sessions[user_id].wallet_addresses = [
+                    wallet["wallet_address"] for wallet in wallets_data if wallet["is_active"]
+                ]
+            else:
+                # 后端API不可用，使用本地文件
+                persistent_addresses = get_user_wallet_data(user_id)
+                user_sessions[user_id].wallet_addresses = persistent_addresses
+        except Exception as e:
+            logger.warning(f"从后端API加载钱包地址失败，使用本地文件: {e}")
+            persistent_addresses = get_user_wallet_data(user_id)
+            user_sessions[user_id].wallet_addresses = persistent_addresses
+    
     return user_sessions[user_id]
 
 def add_wallet_address(user_id: int, address: str) -> bool:
@@ -76,26 +135,55 @@ def add_wallet_address(user_id: int, address: str) -> bool:
     if not is_valid_tron_address(address):
         return False
     
-    # 检查是否已存在
+    # 尝试通过后端API添加
+    try:
+        success = backend_api.add_user_wallet(user_id, address)
+        if success:
+            # 更新本地会话
+            if address not in session.wallet_addresses:
+                session.wallet_addresses.append(address)
+            logger.info(f"用户 {user_id} 通过API添加地址: {address}")
+            return True
+    except Exception as e:
+        logger.warning(f"通过API添加钱包地址失败，使用本地存储: {e}")
+    
+    # API失败时使用本地存储
     if address not in session.wallet_addresses:
         session.wallet_addresses.append(address)
-        # 保存到持久化存储
+        # 保存到本地文件作为备份
         save_user_wallet_data(user_id, session.wallet_addresses)
-        logger.info(f"用户 {user_id} 添加地址: {address}")
+        logger.info(f"用户 {user_id} 通过本地存储添加地址: {address}")
         return True
     return False
 
 def remove_wallet_address(user_id: int, address: str) -> bool:
     """删除钱包地址"""
     session = get_user_session(user_id)
+    
+    # 尝试通过后端API删除
+    try:
+        success = backend_api.remove_user_wallet(user_id, address)
+        if success:
+            # 更新本地会话
+            if address in session.wallet_addresses:
+                session.wallet_addresses.remove(address)
+            # 如果删除的是当前选中的地址，清空选择
+            if session.selected_address == address:
+                session.selected_address = None
+            logger.info(f"用户 {user_id} 通过API删除地址: {address}")
+            return True
+    except Exception as e:
+        logger.warning(f"通过API删除钱包地址失败，使用本地存储: {e}")
+    
+    # API失败时使用本地存储
     if address in session.wallet_addresses:
         session.wallet_addresses.remove(address)
         # 如果删除的是当前选中的地址，清空选择
         if session.selected_address == address:
             session.selected_address = None
-        # 保存到持久化存储
+        # 保存到本地文件作为备份
         save_user_wallet_data(user_id, session.wallet_addresses)
-        logger.info(f"用户 {user_id} 删除地址: {address}")
+        logger.info(f"用户 {user_id} 通过本地存储删除地址: {address}")
         return True
     return False
 
