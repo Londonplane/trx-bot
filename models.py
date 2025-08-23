@@ -16,6 +16,10 @@ class UserSession:
         self.address_balance = None  # 存储地址余额信息 {"TRX": "18.900009", "ENERGY": "0"}
         self.wallet_addresses = []  # 用户绑定的钱包地址列表
         self.show_balance_in_buy_page = False  # 是否在购买页面显示余额信息
+        # 订单相关信息
+        self.last_order_id = None  # 最近一次订单ID
+        self.last_transaction_hash = None  # 最近一次交易哈希
+        self.last_order_time = None  # 最近一次订单时间
 
 # 用户会话状态存储（内存）
 user_sessions = {}

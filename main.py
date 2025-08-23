@@ -31,6 +31,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_address_callback(update, context)
     elif callback_data.startswith("payment:"):
         await handle_payment_callback(update, context)
+    elif callback_data.startswith("insufficient:") or callback_data.startswith("deposit:"):
+        await handle_buy_energy_callback(update, context)
+    elif callback_data.startswith("success:") or callback_data.startswith("order:"):
+        await handle_buy_energy_callback(update, context)
     elif callback_data == "main:home":
         await start_command_from_callback(query, context)
     elif callback_data == "main:wallet_management":

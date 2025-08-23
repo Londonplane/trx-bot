@@ -212,7 +212,10 @@ async def handle_buy_energy_callback(update: Update, context: ContextTypes.DEFAU
         await confirm_payment(query, context)
         
     elif callback_data == "buy_energy:close":
-        # 关闭闪租页
+        # 关闭闪租页 - 清除地址选择状态
+        session = get_user_session(user_id)
+        session.selected_address = None
+        session.address_balance = None
         await query.edit_message_text("您可以随时通过主菜单返回。\n\n发送 /start 重新开始。")
         
     elif callback_data == "buy_energy:cancel_input":
@@ -220,6 +223,30 @@ async def handle_buy_energy_callback(update: Update, context: ContextTypes.DEFAU
         session = get_user_session(user_id)
         session.pending_input = None
         await query.delete_message()  # 删除提示消息
+        
+    elif callback_data == "insufficient:later":
+        # 关闭余额不足消息
+        await query.delete_message()
+        
+    elif callback_data == "deposit:show":
+        # 显示充值页面
+        await show_deposit_page(query, context)
+        
+    elif callback_data == "deposit:later":
+        # 关闭充值页面
+        await query.delete_message()
+        
+    elif callback_data == "success:buy_more":
+        # 从成功页面返回闪租页
+        await return_to_buy_energy_page(query, context)
+        
+    elif callback_data == "success:check_balance":
+        # 显示订单详情和余额信息
+        await show_order_details(query, context)
+        
+    elif callback_data == "order:close":
+        # 关闭订单详情页面
+        await query.delete_message()
 
 async def show_address_selection(query, context):
     """显示地址选择界面"""
@@ -322,28 +349,261 @@ async def refresh_address_balance(query, context):
             pass  # 忽略删除消息时的错误
 
 async def confirm_payment(query, context):
-    """确认支付处理"""
+    """确认支付处理 - BUY按钮点击处理"""
     user_id = query.from_user.id
     session = get_user_session(user_id)
     
-    # 生成订单摘要
-    energy_display = format_energy(session.selected_energy)
-    text = f"""📋 订单确认
+    # 获取所需费用和用户余额
+    required_cost = float(session.computed_cost)
+    user_trx_balance = float(session.user_balance['TRX'])
+    
+    # 检查余额是否充足
+    if required_cost > user_trx_balance:
+        # 余额不足，显示充值消息
+        await show_insufficient_balance_message(query, context, required_cost, user_trx_balance)
+    else:
+        # 余额充足，执行支付并显示成功消息
+        await process_successful_payment(query, context, session, required_cost)
 
-能量数量: {energy_display}
-租赁时长: {session.selected_duration}
-接收地址: {session.selected_address[:6]}...{session.selected_address[-4:]}
-费用: {session.computed_cost} TRX
+async def process_successful_payment(query, context, session, cost: float):
+    """处理成功支付流程"""
+    import uuid
+    import time
+    
+    # 扣减用户余额
+    current_balance = float(session.user_balance['TRX'])
+    new_balance = current_balance - cost
+    session.user_balance['TRX'] = f"{new_balance:.3f}"
+    
+    # 生成订单信息
+    session.last_order_id = str(uuid.uuid4())[:8].upper()
+    session.last_transaction_hash = f"0x{''.join([hex(ord(c))[2:] for c in session.last_order_id])}"[:66]
+    session.last_order_time = int(time.time())
+    
+    # 格式化能量数量显示
+    energy_value = session.selected_energy
+    if energy_value.endswith("K"):
+        if energy_value == "65K":
+            energy_display = "65 000"
+        elif energy_value == "135K":
+            energy_display = "135 000"
+        elif energy_value == "270K":
+            energy_display = "270 000"
+        elif energy_value == "540K":
+            energy_display = "540 000"
+        else:
+            energy_display = energy_value
+    elif energy_value.endswith("M"):
+        if energy_value == "1M":
+            energy_display = "1 000 000"
+        else:
+            energy_display = energy_value
+    elif energy_value.isdigit():
+        val = int(energy_value)
+        energy_display = f"{val:,}".replace(",", " ")
+    else:
+        energy_display = energy_value
+    
+    # 创建成功消息
+    text = f"""✅ The transaction was successfully completed!
+🎯 Address: {session.selected_address}
+⚡ Quantity: {energy_display}
+📅 Duration: {session.selected_duration}
+💵 Cost: {cost:.2f} TRX
+💰 Balance: {new_balance:.3f} TRX
 
-⚠️ 这是演示版本，不会执行实际支付。
-
-确认要继续吗？"""
+Expect the energy to arrive in your wallet within a couple of minutes.
+✅ Sent."""
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ 确认支付", callback_data="payment:confirm"),
-            InlineKeyboardButton("❌ 取消", callback_data="buy_energy:back")
+            InlineKeyboardButton("⚡ Buy more", callback_data="success:buy_more"),
+            InlineKeyboardButton("🔄 Check balance", callback_data="success:check_balance")
         ]
     ])
     
-    await query.edit_message_text(text, reply_markup=keyboard)
+    # 发送成功消息
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=text,
+        reply_markup=keyboard
+    )
+
+async def show_insufficient_balance_message(query, context, required_cost: float, current_balance: float):
+    """显示余额不足消息"""
+    text = f"""Not enough balance!
+To purchase you need: {required_cost:.2f} TRX
+Your balance: {current_balance:.3f} TRX"""
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💳 Deposit", callback_data="deposit:show"),
+            InlineKeyboardButton("❌ Later", callback_data="insufficient:later")
+        ]
+    ])
+    
+    # 发送新消息而不是编辑原消息
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=text,
+        reply_markup=keyboard
+    )
+
+async def show_deposit_page(query, context):
+    """显示充值页面"""
+    deposit_address = "TYwv7C4Fik2tYuHBwuNSzrnJ4Bw7NukyRb"
+    
+    text = f"""Transfer the desired amount to the wallet below:
+
+{deposit_address}
+
+❗Only TRX and USDT TRC20 are accepted for payment.
+
+When paying in USDT TRC20, the rate is 1 TRX = 0.38826 USDT. For example,
+when replenishing the balance by 10 USDT
+your balance will receive: 25.75594 TRX
+
+After replenishment, your balance will be updated within 5 minutes.
+
+🔁 Refund
+
+A 10% fee applies to mistaken top-ups, withdrawals, or refunds to cover costs and maintain stable service. Please double-check before transferring funds.
+
+⚠️ Minimum deposit amount is 10 TRX / 10 USDT. If you send a smaller amount, the balance will not be credited  ⏳ [ 03:00 ]"""
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Later", callback_data="deposit:later")]
+    ])
+    
+    # 删除原消息并发送新消息
+    await query.delete_message()
+    
+    # 发送充值页面消息
+    deposit_message = await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text=text,
+        reply_markup=keyboard
+    )
+    
+    # 启动倒计时任务
+    asyncio.create_task(countdown_timer(context, query.from_user.id, deposit_message.message_id))
+
+async def countdown_timer(context, chat_id: int, message_id: int):
+    """3分钟倒计时功能"""
+    deposit_address = "TYwv7C4Fik2tYuHBwuNSzrnJ4Bw7NukyRb"
+    
+    for remaining_seconds in range(180, -1, -5):  # 180秒到0，每5秒更新一次
+        minutes = remaining_seconds // 60
+        seconds = remaining_seconds % 60
+        time_display = f"{minutes:02d}:{seconds:02d}"
+        
+        text = f"""Transfer the desired amount to the wallet below:
+
+{deposit_address}
+
+❗Only TRX and USDT TRC20 are accepted for payment.
+
+When paying in USDT TRC20, the rate is 1 TRX = 0.38826 USDT. For example,
+when replenishing the balance by 10 USDT
+your balance will receive: 25.75594 TRX
+
+After replenishment, your balance will be updated within 5 minutes.
+
+🔁 Refund
+
+A 10% fee applies to mistaken top-ups, withdrawals, or refunds to cover costs and maintain stable service. Please double-check before transferring funds.
+
+⚠️ Minimum deposit amount is 10 TRX / 10 USDT. If you send a smaller amount, the balance will not be credited  ⏳ [ {time_display} ]"""
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Later", callback_data="deposit:later")]
+        ])
+        
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=keyboard
+            )
+        except Exception:
+            # 如果消息已被删除或编辑失败，停止倒计时
+            return
+            
+        if remaining_seconds > 0:
+            await asyncio.sleep(5)  # 等待5秒
+    
+    # 倒计时结束，删除消息
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass  # 忽略删除失败的情况
+
+async def return_to_buy_energy_page(query, context):
+    """返回闪租页面"""
+    user_id = query.from_user.id
+    
+    # 生成闪租页面内容
+    text = generate_buy_energy_text(user_id)
+    keyboard = generate_buy_energy_keyboard(user_id)
+    
+    # 编辑消息内容
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+async def show_order_details(query, context):
+    """显示订单详情"""
+    user_id = query.from_user.id
+    session = get_user_session(user_id)
+    
+    # 生成TronScan链接
+    tronscan_link = f"https://tronscan.org/#/transaction/{session.last_transaction_hash}"
+    
+    # 格式化能量数量显示
+    energy_value = session.selected_energy
+    if energy_value.endswith("K"):
+        if energy_value == "65K":
+            energy_display = "65 000"
+        elif energy_value == "135K":
+            energy_display = "135 000"
+        elif energy_value == "270K":
+            energy_display = "270 000"
+        elif energy_value == "540K":
+            energy_display = "540 000"
+        else:
+            energy_display = energy_value
+    elif energy_value.endswith("M"):
+        if energy_value == "1M":
+            energy_display = "1 000 000"
+        else:
+            energy_display = energy_value
+    elif energy_value.isdigit():
+        val = int(energy_value)
+        energy_display = f"{val:,}".replace(",", " ")
+    else:
+        energy_display = energy_value
+    
+    # 创建订单详情消息
+    text = f"""📋 Order Details
+
+🆔 Order ID: {session.last_order_id}
+🔗 Transaction: [TRONSCAN LINK]({tronscan_link})
+🎯 Wallet Address: {session.selected_address}
+⚡ Quantity: {energy_display}
+📅 Duration: {session.selected_duration}
+💵 Cost: {session.computed_cost} TRX
+💰 Balance: {session.user_balance['TRX']} TRX"""
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⚡ Buy more", callback_data="success:buy_more"),
+            InlineKeyboardButton("❌ Close", callback_data="order:close")
+        ]
+    ])
+    
+    # 发送订单详情消息
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=text,
+        reply_markup=keyboard,
+        parse_mode='Markdown'
+    )
