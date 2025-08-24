@@ -57,41 +57,27 @@
 
 ## 快速开始
 
-### 1. 启动Telegram Bot
+### 🏠 本地测试 (推荐首次使用)
+
 ```bash
-pip install -r requirements.txt
+# 1. 启动后端服务
+cd backend && start_services.bat  # Windows
+cd backend && ./start_services.sh # Linux/macOS
+
+# 2. 验证API服务
+curl http://localhost:8001/health
+
+# 3. 启动Telegram Bot
 python main.py
 ```
 
-### 2. 启动后端服务
+**本地测试指南**: [docs/本地测试指南.md](docs/本地测试指南.md) - 30分钟完成功能验证
 
-#### 自动启动 (推荐)
-```bash
-# Windows
-cd backend && start_services.bat
+### 🚀 生产环境部署
 
-# Linux/MacOS  
-cd backend && chmod +x start_services.sh && ./start_services.sh
-```
+详细部署指南: [docs/正式场景测试指南.md](docs/正式场景测试指南.md)
 
-#### 手动启动
-```bash
-cd backend
-pip install -r requirements.txt
-python main.py
-```
-
-访问API文档: http://localhost:8001/docs
-
-### 3. 环境配置
-
-创建 `backend/.env` 文件：
-```bash
-DATABASE_URL=sqlite:///./trx_energy.db
-REDIS_URL=redis://localhost:6379
-SECRET_KEY=your-super-secret-key
-ENCRYPTION_KEY=your-encryption-key-for-private-keys
-```
+快速清单: [docs/生产测试快速清单.md](docs/生产测试快速清单.md)
 
 ## API接口
 
