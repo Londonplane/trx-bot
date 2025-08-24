@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 import os
 
 class Settings(BaseSettings):
-    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/trx_energy")
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./trx_energy.db")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     
