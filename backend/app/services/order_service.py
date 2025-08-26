@@ -73,6 +73,16 @@ class OrderService:
         
         return [self._order_to_response(order) for order in orders]
     
+    def get_all_orders(self, status: str = None, skip: int = 0, limit: int = 100) -> list[OrderResponse]:
+        """获取所有订单列表（管理后台用）"""
+        query = self.db.query(Order)
+        
+        if status:
+            query = query.filter(Order.status == status)
+        
+        orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+        return [self._order_to_response(order) for order in orders]
+    
     async def cancel_order(self, order_id: str) -> bool:
         """取消订单"""
         order = self.db.query(Order).filter(Order.id == order_id).first()

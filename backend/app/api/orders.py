@@ -38,14 +38,25 @@ async def get_order(order_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="内部服务器错误")
 
 @router.get("/", response_model=List[OrderResponse])
-async def get_user_orders(user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """获取用户订单列表"""
+async def get_orders(
+    user_id: int = None, 
+    status: str = None,
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db)
+):
+    """获取订单列表（支持管理后台）"""
     try:
         order_service = OrderService(db)
-        orders = order_service.get_user_orders(user_id, skip=skip, limit=limit)
+        if user_id:
+            # 获取指定用户的订单
+            orders = order_service.get_user_orders(user_id, skip=skip, limit=limit)
+        else:
+            # 获取所有订单（管理后台用）
+            orders = order_service.get_all_orders(status=status, skip=skip, limit=limit)
         return orders
     except Exception as e:
-        logger.error(f"查询用户订单失败: {e}")
+        logger.error(f"查询订单失败: {e}")
         raise HTTPException(status_code=500, detail="内部服务器错误")
 
 @router.post("/{order_id}/cancel", response_model=ApiResponse)
