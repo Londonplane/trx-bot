@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models import Order, User, BalanceTransaction
 from app.schemas import CreateOrderRequest, OrderResponse
+from app.utils.task_launcher import safely_start_order_task
 from decimal import Decimal
 from datetime import datetime, timedelta
 import logging
@@ -47,13 +48,10 @@ class OrderService:
         self.db.commit()
         self.db.refresh(order)
         
-        # 触发后台任务立即处理订单（如果Celery可用）
-        try:
-            from tron_worker import execute_order
-            execute_order.delay(order.id)
-            logger.info(f"订单后台处理任务已启动: {order.id}")
-        except ImportError:
-            logger.warning("Celery不可用，订单将通过定时任务处理")
+        # 触发后台任务立即处理订单（如果可用）
+        task_started = safely_start_order_task(order.id)
+        if not task_started:
+            logger.info(f"订单 {order.id} 将通过定时任务处理")
         
         logger.info(f"订单创建成功: {order.id}, 用户: {order_request.user_id}")
         return self._order_to_response(order)
