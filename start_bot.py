@@ -91,7 +91,7 @@ def kill_process_tree(pid):
 
 def check_ports():
     """检查关键端口是否被占用"""
-    ports_to_check = [8001, 8002]  # Bot和backend可能使用的端口
+    ports_to_check = [8002]  # backend服务使用的端口
     occupied_ports = []
     
     for port in ports_to_check:

@@ -8,7 +8,7 @@
 
 ### 核心组件
 
-1. **FastAPI后端服务** (端口8001)
+1. **FastAPI后端服务** (端口8002)
    - RESTful API接口
    - 用户余额管理
    - 订单生命周期管理
@@ -99,11 +99,11 @@ celery -A tron_worker beat --loglevel=info
 
 ```bash
 # 检查服务状态
-curl -X GET http://localhost:8001/health
+curl -X GET http://localhost:8002/health
 # 响应：{"status":"healthy","message":"API服务正常运行"}
 
 # 检查API版本
-curl -X GET http://localhost:8001/
+curl -X GET http://localhost:8002/
 # 响应：{"message":"TRON Energy Backend API","version":"1.0.0"}
 ```
 
@@ -111,10 +111,10 @@ curl -X GET http://localhost:8001/
 
 ```bash
 # 1. 查询用户余额
-curl -X GET http://localhost:8001/api/users/123456/balance
+curl -X GET http://localhost:8002/api/users/123456/balance
 
 # 2. 用户充值（模拟）
-curl -X POST http://localhost:8001/api/users/123456/deposit \
+curl -X POST http://localhost:8002/api/users/123456/deposit \
   -H "Content-Type: application/json" \
   -d '{
     "tx_hash": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -123,14 +123,14 @@ curl -X POST http://localhost:8001/api/users/123456/deposit \
   }'
 
 # 3. 查询余额变动记录
-curl -X GET http://localhost:8001/api/users/123456/transactions
+curl -X GET http://localhost:8002/api/users/123456/transactions
 ```
 
 ### 订单管理测试
 
 ```bash
 # 1. 创建订单
-curl -X POST http://localhost:8001/api/orders/ \
+curl -X POST http://localhost:8002/api/orders/ \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": 123456,
@@ -140,36 +140,36 @@ curl -X POST http://localhost:8001/api/orders/ \
   }'
 
 # 2. 查询订单详情
-curl -X GET http://localhost:8001/api/orders/{order_id}
+curl -X GET http://localhost:8002/api/orders/{order_id}
 
 # 3. 查询用户订单列表
-curl -X GET http://localhost:8001/api/orders?user_id=123456&limit=10
+curl -X GET http://localhost:8002/api/orders?user_id=123456&limit=10
 
 # 4. 取消订单
-curl -X POST http://localhost:8001/api/orders/{order_id}/cancel
+curl -X POST http://localhost:8002/api/orders/{order_id}/cancel
 ```
 
 ### 供应商钱包管理测试
 
 ```bash
 # 1. 查看钱包池
-curl -X GET http://localhost:8001/api/supplier-wallets/
+curl -X GET http://localhost:8002/api/supplier-wallets/
 
 # 2. 添加供应商钱包（需要真实私钥）
-curl -X POST http://localhost:8001/api/supplier-wallets/add \
+curl -X POST http://localhost:8002/api/supplier-wallets/add \
   -H "Content-Type: application/json" \
   -d '{
     "private_key": "your-supplier-wallet-private-key"
   }'
 
 # 3. 更新钱包余额
-curl -X POST http://localhost:8001/api/supplier-wallets/update-balances
+curl -X POST http://localhost:8002/api/supplier-wallets/update-balances
 
 # 4. 手动处理订单
-curl -X POST http://localhost:8001/api/supplier-wallets/process-orders
+curl -X POST http://localhost:8002/api/supplier-wallets/process-orders
 
 # 5. 启用/禁用钱包
-curl -X PUT http://localhost:8001/api/supplier-wallets/{wallet_id}/toggle
+curl -X PUT http://localhost:8002/api/supplier-wallets/{wallet_id}/toggle
 ```
 
 ## 完整业务流程测试
@@ -179,7 +179,7 @@ curl -X PUT http://localhost:8001/api/supplier-wallets/{wallet_id}/toggle
 1. **用户充值流程**
    ```bash
    # 模拟用户充值10 TRX
-   curl -X POST http://localhost:8001/api/users/999888/deposit \
+   curl -X POST http://localhost:8002/api/users/999888/deposit \
      -H "Content-Type: application/json" \
      -d '{
        "tx_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
@@ -191,7 +191,7 @@ curl -X PUT http://localhost:8001/api/supplier-wallets/{wallet_id}/toggle
 2. **创建能量租赁订单**
    ```bash
    # 租赁65,000能量，1小时
-   curl -X POST http://localhost:8001/api/orders/ \
+   curl -X POST http://localhost:8002/api/orders/ \
      -H "Content-Type: application/json" \
      -d '{
        "user_id": 999888,
@@ -204,13 +204,13 @@ curl -X PUT http://localhost:8001/api/supplier-wallets/{wallet_id}/toggle
 3. **监控订单处理**
    ```bash
    # 查询订单状态变化：pending → processing → completed
-   curl -X GET http://localhost:8001/api/orders/{order_id}
+   curl -X GET http://localhost:8002/api/orders/{order_id}
    ```
 
 4. **验证余额扣减**
    ```bash
    # 确认用户余额被正确扣减
-   curl -X GET http://localhost:8001/api/users/999888/balance
+   curl -X GET http://localhost:8002/api/users/999888/balance
    ```
 
 ## 监控和日志
@@ -236,7 +236,7 @@ tail -f /var/log/tron-backend.log
 
 ```bash
 # API响应时间测试
-time curl -X GET http://localhost:8001/api/users/123456/balance
+time curl -X GET http://localhost:8002/api/users/123456/balance
 
 # 数据库查询性能
 sqlite3 trx_energy.db "EXPLAIN QUERY PLAN SELECT * FROM orders WHERE user_id = 123456;"

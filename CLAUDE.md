@@ -137,7 +137,7 @@ start_services.bat
 # 或手动启动（跨平台）
 python main.py
 ```
-**验证**: 访问 http://localhost:8001/health 应返回 `{"status":"healthy"}`
+**验证**: 访问 http://localhost:8002/health 应返回 `{"status":"healthy"}`
 
 #### 2. 启动Telegram Bot
 ```bash
@@ -162,7 +162,7 @@ python main.py
 
 ### 生产环境要求
 - **服务器**: VPS或云服务器，推荐2GB+ 内存
-- **端口**: 确保8001端口可用（后端API服务）
+- **端口**: 确保8002端口可用（后端API服务）
 - **域名**: 可选，用于Webhook模式
 - **SSL证书**: 如使用Webhook模式需要
 
@@ -208,13 +208,13 @@ pm2 start main.py --name "trx-bot"
 ### 常见问题
 
 #### 1. 连接被拒绝错误 (WinError 10061)
-**症状**: `HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded`
+**症状**: `HTTPConnectionPool(host='localhost', port=8002): Max retries exceeded`
 **原因**: 后端API服务未启动
 **解决**:
 ```bash
 # 确保后端服务运行
 cd backend && python main.py
-# 验证服务: curl http://localhost:8001/health
+# 验证服务: curl http://localhost:8002/health
 ```
 
 #### 2. Bot无响应或功能异常
@@ -234,8 +234,8 @@ cd backend && python main.py
 ### 监控与日志
 - **Bot日志**: 终端输出包含详细的操作日志
 - **后端日志**: FastAPI服务的访问和错误日志
-- **健康检查**: http://localhost:8001/health
-- **API文档**: http://localhost:8001/docs
+- **健康检查**: http://localhost:8002/health
+- **API文档**: http://localhost:8002/docs
 
 ### 维护建议
 - **定期检查**: 监控API服务状态和响应时间

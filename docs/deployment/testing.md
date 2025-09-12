@@ -175,15 +175,15 @@ sudo systemctl start trx-backend
 
 ```bash
 # 检查API服务状态
-curl -X GET http://localhost:8001/health
+curl -X GET http://localhost:8002/health
 # 期望响应: {"status":"healthy","message":"API服务正常运行"}
 
 # 检查API文档
-curl -X GET http://localhost:8001/docs
+curl -X GET http://localhost:8002/docs
 # 期望: 返回OpenAPI文档页面
 
 # 检查数据库连接
-curl -X GET http://localhost:8001/api/users/12345/balance
+curl -X GET http://localhost:8002/api/users/12345/balance
 # 期望响应: {"user_id":12345,"balance_trx":"0.000000","balance_usdt":"0.000000"}
 ```
 
@@ -196,10 +196,10 @@ curl -X GET http://localhost:8001/api/users/12345/balance
 #### 准备钱包信息
 ```bash
 # 查看当前钱包池
-curl -X GET http://localhost:8001/api/supplier-wallets/
+curl -X GET http://localhost:8002/api/supplier-wallets/
 
 # 添加第一个供应商钱包
-curl -X POST http://localhost:8001/api/supplier-wallets/add \
+curl -X POST http://localhost:8002/api/supplier-wallets/add \
   -H "Content-Type: application/json" \
   -d '{
     "private_key": "your_supplier_wallet_private_key_64_chars"
@@ -211,7 +211,7 @@ curl -X POST http://localhost:8001/api/supplier-wallets/add \
 #### 验证钱包添加结果
 ```bash
 # 再次查看钱包池
-curl -X GET http://localhost:8001/api/supplier-wallets/
+curl -X GET http://localhost:8002/api/supplier-wallets/
 
 # 应该看到钱包地址、TRX余额、Energy可用量等信息
 # 示例响应:
@@ -229,19 +229,19 @@ curl -X GET http://localhost:8001/api/supplier-wallets/
 #### 余额更新测试
 ```bash
 # 手动更新所有钱包余额
-curl -X POST http://localhost:8001/api/supplier-wallets/update-balances
+curl -X POST http://localhost:8002/api/supplier-wallets/update-balances
 
 # 检查更新结果
-curl -X GET http://localhost:8001/api/supplier-wallets/
+curl -X GET http://localhost:8002/api/supplier-wallets/
 ```
 
 #### 钱包状态管理测试
 ```bash
 # 禁用钱包
-curl -X PUT http://localhost:8001/api/supplier-wallets/1/toggle
+curl -X PUT http://localhost:8002/api/supplier-wallets/1/toggle
 
 # 启用钱包
-curl -X PUT http://localhost:8001/api/supplier-wallets/1/toggle
+curl -X PUT http://localhost:8002/api/supplier-wallets/1/toggle
 ```
 
 ---
@@ -253,7 +253,7 @@ curl -X PUT http://localhost:8001/api/supplier-wallets/1/toggle
 #### 创建测试用户并充值
 ```bash
 # 模拟用户充值 - 使用真实的TRON交易哈希
-curl -X POST http://localhost:8001/api/users/999888/deposit \
+curl -X POST http://localhost:8002/api/users/999888/deposit \
   -H "Content-Type: application/json" \
   -d '{
     "tx_hash": "实际的TRON交易哈希64字符",
@@ -267,12 +267,12 @@ curl -X POST http://localhost:8001/api/users/999888/deposit \
 #### 验证用户余额
 ```bash
 # 查询用户余额
-curl -X GET http://localhost:8001/api/users/999888/balance
+curl -X GET http://localhost:8002/api/users/999888/balance
 
 # 期望响应: {"user_id":999888,"balance_trx":"50.000000","balance_usdt":"0.000000"}
 
 # 查询余额变动记录
-curl -X GET http://localhost:8001/api/users/999888/transactions
+curl -X GET http://localhost:8002/api/users/999888/transactions
 ```
 
 ### 3.2 多用户充值测试
@@ -280,7 +280,7 @@ curl -X GET http://localhost:8001/api/users/999888/transactions
 ```bash
 # 测试多个用户充值
 for user_id in 111111 222222 333333; do
-  curl -X POST http://localhost:8001/api/users/$user_id/deposit \
+  curl -X POST http://localhost:8002/api/users/$user_id/deposit \
     -H "Content-Type: application/json" \
     -d '{
       "tx_hash": "不同的交易哈希'$user_id'0000000000000000000000000000000000000000",
@@ -302,7 +302,7 @@ done
 #### 单个订单测试
 ```bash
 # 创建能量租赁订单
-curl -X POST http://localhost:8001/api/orders/ \
+curl -X POST http://localhost:8002/api/orders/ \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": 999888,
@@ -317,10 +317,10 @@ curl -X POST http://localhost:8001/api/orders/ \
 #### 订单状态跟踪
 ```bash
 # 查询订单详情 (替换为实际订单ID)
-curl -X GET http://localhost:8001/api/orders/abc-123-def
+curl -X GET http://localhost:8002/api/orders/abc-123-def
 
 # 持续监控订单状态变化
-watch -n 5 'curl -s http://localhost:8001/api/orders/abc-123-def | jq .status'
+watch -n 5 'curl -s http://localhost:8002/api/orders/abc-123-def | jq .status'
 
 # 预期状态变化: pending → processing → completed (或 failed)
 ```
@@ -330,7 +330,7 @@ watch -n 5 'curl -s http://localhost:8001/api/orders/abc-123-def | jq .status'
 ```bash
 # 创建多个订单测试并发处理能力
 for i in {1..3}; do
-  curl -X POST http://localhost:8001/api/orders/ \
+  curl -X POST http://localhost:8002/api/orders/ \
     -H "Content-Type: application/json" \
     -d '{
       "user_id": '$(($i + 999888))',
@@ -348,7 +348,7 @@ echo "All orders submitted"
 
 ```bash
 # 创建订单用于取消测试
-order_response=$(curl -X POST http://localhost:8001/api/orders/ \
+order_response=$(curl -X POST http://localhost:8002/api/orders/ \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": 999888,
@@ -361,11 +361,11 @@ order_response=$(curl -X POST http://localhost:8001/api/orders/ \
 order_id=$(echo $order_response | jq -r '.id')
 
 # 立即取消订单
-curl -X POST http://localhost:8001/api/orders/$order_id/cancel
+curl -X POST http://localhost:8002/api/orders/$order_id/cancel
 
 # 验证订单状态和退款
-curl -X GET http://localhost:8001/api/orders/$order_id
-curl -X GET http://localhost:8001/api/users/999888/balance
+curl -X GET http://localhost:8002/api/orders/$order_id
+curl -X GET http://localhost:8002/api/users/999888/balance
 ```
 
 ---
@@ -446,10 +446,10 @@ sudo systemctl start trx-bot
 apt install -y apache2-utils
 
 # API响应时间测试
-ab -n 100 -c 10 http://localhost:8001/health
+ab -n 100 -c 10 http://localhost:8002/health
 
 # 用户余额查询压力测试  
-ab -n 50 -c 5 http://localhost:8001/api/users/12345/balance
+ab -n 50 -c 5 http://localhost:8002/api/users/12345/balance
 ```
 
 #### 并发订单测试
@@ -459,7 +459,7 @@ ab -n 50 -c 5 http://localhost:8001/api/users/12345/balance
 
 for i in {1..10}; do
   {
-    curl -X POST http://localhost:8001/api/orders/ \
+    curl -X POST http://localhost:8002/api/orders/ \
       -H "Content-Type: application/json" \
       -d '{
         "user_id": '$((1000 + $i))',
@@ -483,11 +483,11 @@ echo "All concurrent orders submitted"
 #!/bin/bash
 while true; do
   # 检查API健康状态
-  status=$(curl -s http://localhost:8001/health | jq -r '.status')
+  status=$(curl -s http://localhost:8002/health | jq -r '.status')
   echo "$(date): API Status - $status"
   
   # 检查数据库连接
-  db_test=$(curl -s http://localhost:8001/api/users/12345/balance)
+  db_test=$(curl -s http://localhost:8002/api/users/12345/balance)
   echo "$(date): DB Connection - OK"
   
   # 检查服务进程
@@ -530,7 +530,7 @@ EOF
 
 ```bash
 # 测试无效数据处理
-curl -X POST http://localhost:8001/api/orders/ \
+curl -X POST http://localhost:8002/api/orders/ \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "invalid",
@@ -572,15 +572,15 @@ echo
 
 # API响应时间
 echo "API Response Time:"
-time curl -s http://localhost:8001/health > /dev/null
+time curl -s http://localhost:8002/health > /dev/null
 
 # 数据库订单统计
 echo -e "\nOrder Statistics:"
-curl -s http://localhost:8001/api/orders?limit=1000 | jq '. | length'
+curl -s http://localhost:8002/api/orders?limit=1000 | jq '. | length'
 
 # 钱包池状态
 echo -e "\nWallet Pool Status:"
-curl -s http://localhost:8001/api/supplier-wallets/ | jq '.[] | {address: .wallet_address, trx: .trx_balance, energy: .energy_available}'
+curl -s http://localhost:8002/api/supplier-wallets/ | jq '.[] | {address: .wallet_address, trx: .trx_balance, energy: .energy_available}'
 
 echo "=========================="
 ```
@@ -625,7 +625,7 @@ echo "=========================="
 #### 1. API服务无法启动
 ```bash
 # 检查端口占用
-netstat -tlnp | grep 8001
+netstat -tlnp | grep 8002
 
 # 检查依赖安装
 pip3 install -r backend/requirements.txt

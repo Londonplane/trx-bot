@@ -252,7 +252,7 @@
 ## 🔧 测试环境配置
 
 ### 必需服务:
-- [ ] 后端服务 (localhost:8001)
+- [ ] 后端服务 (localhost:8002)
 - [ ] Telegram Bot服务
 - [ ] SQLite数据库
 - [ ] 网络连接 (访问TRON API)

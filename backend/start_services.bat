@@ -50,9 +50,9 @@ echo.
 echo ========================================
 echo TRON能量助手后端服务已启动
 echo ========================================
-echo API服务: http://localhost:8001
-echo API文档: http://localhost:8001/docs
-echo 健康检查: http://localhost:8001/health
+echo API服务: http://localhost:8002
+echo API文档: http://localhost:8002/docs
+echo 健康检查: http://localhost:8002/health
 echo.
 echo 按任意键停止服务...
 pause >nul
