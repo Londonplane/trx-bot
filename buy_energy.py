@@ -210,6 +210,7 @@ async def handle_buy_energy_callback(update: Update, context: ContextTypes.DEFAU
         
     elif callback_data == "buy_energy:pay:confirm":
         # 确认支付
+        print(f"DEBUG: 检测到buy_energy:pay:confirm回调，用户ID: {user_id}")
         await confirm_payment(query, context)
         
     elif callback_data == "buy_energy:close":
@@ -244,6 +245,14 @@ async def handle_buy_energy_callback(update: Update, context: ContextTypes.DEFAU
     elif callback_data == "success:check_balance":
         # 显示订单详情和余额信息
         await show_order_details(query, context)
+        
+    elif callback_data == "order:check_status":
+        # 查询最新订单状态
+        await show_order_status(query, context)
+        
+    elif callback_data == "deposit:rates":
+        # 显示详细汇率信息
+        await show_exchange_rates(query, context)
         
     elif callback_data == "order:close":
         # 关闭订单详情页面
@@ -354,15 +363,23 @@ async def confirm_payment(query, context):
     user_id = query.from_user.id
     session = get_user_session(user_id)
     
+    print(f"DEBUG: BUY按钮被点击，用户ID: {user_id}")
+    print(f"DEBUG: 用户会话状态 - 能量: {session.selected_energy}, 时长: {session.selected_duration}, 地址: {session.selected_address}")
+    
     # 获取所需费用和用户余额
     required_cost = float(session.computed_cost)
-    user_trx_balance = float(session.user_balance['TRX'])
+    user_balance_info = session.user_balance
+    user_trx_balance = float(user_balance_info['TRX'])
+    
+    print(f"DEBUG: 所需费用: {required_cost} TRX, 用户余额: {user_trx_balance} TRX")
     
     # 检查余额是否充足
     if required_cost > user_trx_balance:
+        print(f"DEBUG: 余额不足，显示充值消息")
         # 余额不足，显示充值消息
         await show_insufficient_balance_message(query, context, required_cost, user_trx_balance)
     else:
+        print(f"DEBUG: 余额充足，开始处理支付")
         # 余额充足，执行支付并显示成功消息
         await process_successful_payment(query, context, session, required_cost)
 
@@ -370,15 +387,20 @@ async def process_successful_payment(query, context, session, cost: float):
     """处理成功支付流程"""
     user_id = session.user_id
     
+    print(f"DEBUG: 开始处理成功支付，用户: {user_id}, 费用: {cost}")
+    
     # 解析能量数量为整数
     energy_amount = parse_energy_amount(session.selected_energy)
+    print(f"DEBUG: 解析能量数量: {energy_amount}")
     
     # 调用后端API创建真实订单
+    print(f"DEBUG: 准备创建订单 - 能量: {energy_amount}, 时长: {session.selected_duration}, 地址: {session.selected_address}")
     order_result = session.create_order(
         energy_amount=energy_amount,
         duration=session.selected_duration,
         receive_address=session.selected_address
     )
+    print(f"DEBUG: 订单创建结果: {order_result}")
     
     if order_result["success"]:
         # 订单创建成功
@@ -386,37 +408,56 @@ async def process_successful_payment(query, context, session, cost: float):
         session.last_order_id = order_data["id"]
         session.last_transaction_hash = order_data.get("tx_hash", "pending")
         
+        print(f"DEBUG: 订单创建成功，ID: {order_data['id']}")
+        
         # 格式化能量数量显示
         energy_display = format_energy_display(session.selected_energy)
         
         # 创建成功消息
-        text = f"""✅ The transaction was successfully completed!
-🎯 Address: {session.selected_address}
-⚡ Quantity: {energy_display}
-📅 Duration: {session.selected_duration}
-💵 Cost: {cost:.2f} TRX
-🆔 Order ID: {order_data["id"][:8]}
-💰 Balance: {session.user_balance['TRX']} TRX
+        text = f"""✅ 交易成功完成！
 
-Expect the energy to arrive in your wallet within a couple of minutes.
-✅ Sent."""
+🎯 地址: {session.selected_address[:6]}...{session.selected_address[-6:]}
+⚡ 数量: {energy_display}
+📅 时长: {session.selected_duration}
+💵 费用: {cost:.2f} TRX
+🆔 订单ID: {order_data["id"][:8]}
+💰 余额: {session.user_balance['TRX']} TRX
+
+预计能量将在几分钟内到达您的钱包。
+✅ 已发送。"""
         
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("⚡ Buy more", callback_data="success:buy_more"),
-                InlineKeyboardButton("🔄 Check balance", callback_data="success:check_balance")
+                InlineKeyboardButton("⚡ 继续购买", callback_data="success:buy_more"),
+                InlineKeyboardButton("📊 订单状态", callback_data="order:check_status")
+            ],
+            [
+                InlineKeyboardButton("🔄 查看余额", callback_data="success:check_balance")
             ]
         ])
         
-        # 发送成功消息
-        await context.bot.send_message(
-            chat_id=query.from_user.id,
-            text=text,
-            reply_markup=keyboard
-        )
+        print(f"DEBUG: 准备发送成功消息到用户 {user_id}")
+        
+        try:
+            # 发送成功消息
+            message = await context.bot.send_message(
+                chat_id=user_id,
+                text=text,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+            print(f"DEBUG: 成功消息发送完成，消息ID: {message.message_id}")
+        except Exception as e:
+            print(f"DEBUG: 发送成功消息失败: {e}")
+            # 尝试发送简单版本
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"✅ 订单创建成功！订单ID: {order_data['id'][:8]}"
+            )
     else:
         # 订单创建失败
         error_msg = order_result.get("message", "订单创建失败")
+        print(f"DEBUG: 订单创建失败: {error_msg}")
         await query.answer(f"订单失败: {error_msg}", show_alert=True)
 
 def parse_energy_amount(energy_str: str) -> int:
@@ -448,27 +489,101 @@ def format_energy_display(energy_str: str) -> str:
     return f"{energy_amount:,}".replace(",", " ")
 
 async def show_insufficient_balance_message(query, context, required_cost: float, current_balance: float):
-    """显示余额不足消息"""
-    text = f"""Not enough balance!
-To purchase you need: {required_cost:.2f} TRX
-Your balance: {current_balance:.3f} TRX"""
+    """显示余额不足充值提醒消息"""
+    print(f"DEBUG: 准备显示余额不足消息，所需: {required_cost}, 当前: {current_balance}")
+    
+    # 计算需要充值的数量（加上一些缓冲）
+    needed_amount = required_cost - current_balance
+    recommended_amount = max(10.0, needed_amount + 5.0)  # 至少充值10 TRX，额外加5 TRX缓冲
+    
+    text = f"""💰 余额不足提醒
+
+📊 订单详情：
+💵 所需费用：{required_cost:.2f} TRX
+💳 当前余额：{current_balance:.3f} TRX
+❌ 不足金额：{needed_amount:.2f} TRX
+
+💡 建议充值：{recommended_amount:.0f} TRX
+（包含缓冲金额，可用于多次交易）
+
+🔄 支持的充值方式：
+• TRX (TRON网络)
+• USDT TRC20
+
+💱 汇率：1 TRX = 0.38826 USDT
+例如充值 {recommended_amount:.0f} USDT ≈ {recommended_amount/0.38826:.1f} TRX
+
+⚡ 充值后余额通常在5分钟内到账"""
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💳 Deposit", callback_data="deposit:show"),
-            InlineKeyboardButton("❌ Later", callback_data="insufficient:later")
+            InlineKeyboardButton("💳 立即充值", callback_data="deposit:show"),
+        ],
+        [
+            InlineKeyboardButton("📊 查看详细汇率", callback_data="deposit:rates"),
+            InlineKeyboardButton("❌ 稍后充值", callback_data="insufficient:later")
+        ],
+        [
+            InlineKeyboardButton("🔙 返回购买页", callback_data="main:buy_energy")
         ]
     ])
     
-    # 发送新消息而不是编辑原消息
-    await context.bot.send_message(
-        chat_id=query.from_user.id,
-        text=text,
-        reply_markup=keyboard
-    )
+    print(f"DEBUG: 准备发送余额不足消息到用户 {query.from_user.id}")
+    
+    try:
+        # 发送新消息而不是编辑原消息
+        message = await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        print(f"DEBUG: 余额不足消息发送成功，消息ID: {message.message_id}")
+    except Exception as e:
+        print(f"DEBUG: 发送余额不足消息失败: {e}")
+        raise
+
+async def show_exchange_rates(query, context):
+    """显示详细汇率信息"""
+    text = """💱 详细充值汇率信息
+
+🔸 当前汇率（实时更新）
+• 1 TRX = 0.38826 USDT
+• 1 USDT = 2.576 TRX
+
+📊 充值参考表：
+┌──────────────┬──────────────┐
+│   TRX金额    │  USDT等值    │
+├──────────────┼──────────────┤
+│   10 TRX     │   3.88 USDT  │
+│   20 TRX     │   7.77 USDT  │
+│   50 TRX     │  19.41 USDT  │
+│  100 TRX     │  38.83 USDT  │
+│  200 TRX     │  77.65 USDT  │
+└──────────────┴──────────────┘
+
+⚠️ 重要说明：
+• 最低充值金额：10 TRX 或 10 USDT
+• 充值小于最低金额不会到账
+• 充值确认时间：通常3-5分钟
+• 汇率可能有轻微波动
+
+🔄 支持的网络：
+• TRX：TRON主网
+• USDT：TRC20（TRON网络）"""
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💳 立即充值", callback_data="deposit:show")
+        ],
+        [
+            InlineKeyboardButton("🔙 返回", callback_data="insufficient:later")
+        ]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_deposit_page(query, context):
-    """显示充值页面"""
     deposit_address = "TYwv7C4Fik2tYuHBwuNSzrnJ4Bw7NukyRb"
     
     text = f"""Transfer the desired amount to the wallet below:
@@ -625,3 +740,77 @@ async def show_order_details(query, context):
         reply_markup=keyboard,
         parse_mode='Markdown'
     )
+
+async def show_order_status(query, context):
+    """显示最新订单状态"""
+    user_id = query.from_user.id
+    session = get_user_session(user_id)
+    
+    if not session.last_order_id:
+        await query.answer("没有找到最近的订单", show_alert=True)
+        return
+    
+    # 显示状态查询提示
+    status_message = await context.bot.send_message(
+        chat_id=user_id,
+        text="🔍 查询订单状态中..."
+    )
+    
+    try:
+        # 调用后端API查询订单状态
+        order_data = session.get_order_status(session.last_order_id)
+        
+        if order_data:
+            # 格式化状态显示
+            status_emoji = {
+                "pending": "⏳",
+                "processing": "🔄", 
+                "completed": "✅",
+                "failed": "❌",
+                "cancelled": "🚫"
+            }.get(order_data["status"], "❓")
+            
+            status_text = {
+                "pending": "等待处理",
+                "processing": "处理中",
+                "completed": "已完成",
+                "failed": "失败",
+                "cancelled": "已取消"
+            }.get(order_data["status"], "未知状态")
+            
+            # 构建状态消息
+            text = f"""📊 订单状态查询
+
+🆔 订单ID: {order_data["id"][:8]}...
+{status_emoji} 状态: {status_text}
+⚡ 能量数量: {order_data["energy_amount"]:,}
+📅 租用时长: {order_data["duration_hours"]}小时
+💵 费用: {order_data["cost_trx"]} TRX
+📍 接收地址: {order_data["receive_address"][:8]}...
+
+📅 创建时间: {order_data["created_at"][:19].replace('T', ' ')}"""
+
+            if order_data.get("tx_hash"):
+                text += f"\n🔗 交易哈希: {order_data['tx_hash'][:8]}..."
+            
+            if order_data.get("error_message"):
+                text += f"\n❌ 错误信息: {order_data['error_message']}"
+            
+            if order_data.get("completed_at"):
+                text += f"\n✅ 完成时间: {order_data['completed_at'][:19].replace('T', ' ')}"
+            
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("🔄 刷新状态", callback_data="order:check_status"),
+                    InlineKeyboardButton("❌ 关闭", callback_data="order:close")
+                ]
+            ])
+            
+            await status_message.edit_text(text, reply_markup=keyboard)
+            
+        else:
+            await status_message.edit_text("❌ 订单查询失败，请稍后再试")
+            
+    except Exception as e:
+        logger.error(f"查询订单状态异常: {e}")
+        await status_message.edit_text("❌ 查询订单状态时发生错误")

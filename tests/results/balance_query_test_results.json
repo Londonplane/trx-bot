@@ -1,0 +1,101 @@
+{
+  "start_time": "2025-09-12T19:30:26.201674",
+  "end_time": "2025-09-12T19:30:35.925668",
+  "summary": {
+    "passed": 7,
+    "failed": 3,
+    "skipped": 0,
+    "total": 11
+  },
+  "success_rate": "63.6%",
+  "tests": [
+    {
+      "test_name": "钱包customer余额查询",
+      "status": "PASS",
+      "details": "余额查询成功: TRX: 1000.0, Energy: 0, Bandwidth: 660",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:26.201674"
+    },
+    {
+      "test_name": "钱包platform余额查询",
+      "status": "PASS",
+      "details": "余额查询成功: TRX: 7000.0, Energy: 0, Bandwidth: 600",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:27.130485"
+    },
+    {
+      "test_name": "钱包supplier余额查询",
+      "status": "PARTIAL",
+      "details": "余额与预期有差异: 实际1000.0 vs 预期2000.0",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:28.116732"
+    },
+    {
+      "test_name": "余额数据一致性",
+      "status": "PASS",
+      "details": "连续查询数据保持一致",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:30.998398"
+    },
+    {
+      "test_name": "无效地址处理-",
+      "status": "PASS",
+      "details": "正确识别并处理无效地址",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:31.978590"
+    },
+    {
+      "test_name": "无效地址处理-invalid_ad",
+      "status": "PASS",
+      "details": "正确识别并处理无效地址",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:32.967715"
+    },
+    {
+      "test_name": "无效地址处理-T111111111",
+      "status": "FAIL",
+      "details": "未能正确处理无效地址",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:34.084039"
+    },
+    {
+      "test_name": "无效地址处理-A111111111",
+      "status": "FAIL",
+      "details": "未能正确处理无效地址",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:34.936674"
+    },
+    {
+      "test_name": "网络错误处理",
+      "status": "FAIL",
+      "details": "未能正确处理网络错误",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:35.923538"
+    },
+    {
+      "test_name": "余额格式验证",
+      "status": "PASS",
+      "details": "余额数据格式正确",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:35.923538"
+    },
+    {
+      "test_name": "余额格式化显示",
+      "status": "PASS",
+      "details": "格式化结果：TRX: 1000.0, Energy: 0, Bandwidth: 395",
+      "expected": null,
+      "actual": null,
+      "timestamp": "2025-09-12T19:30:35.924622"
+    }
+  ]
+}

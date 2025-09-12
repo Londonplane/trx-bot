@@ -191,13 +191,13 @@ class TronAPI:
         """获取账户完整余额信息"""
         self.logger.info(f"查询地址余额: {address}")
         
-        # 首先尝试TronScan API（更稳定）
-        balance = self.get_account_balance_tronscan(address)
+        # 首先尝试官方API（数据更准确和及时，特别是质押信息）
+        balance = self.get_account_balance_official(address)
         if balance:
             return balance
         
-        # TronScan失败，尝试官方API
-        return self.get_account_balance_official(address)
+        # 官方API失败，尝试TronScan API作为备用
+        return self.get_account_balance_tronscan(address)
     
     def get_account_balance_official(self, address: str) -> Optional[AccountBalance]:
         """使用官方API获取账户余额"""

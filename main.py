@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import os
+import sys
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from dotenv import load_dotenv
@@ -8,6 +10,15 @@ from tron_api import TronAPI
 from models import get_user_session, format_energy
 from buy_energy import handle_buy_energy_callback, generate_buy_energy_text, generate_buy_energy_keyboard
 from config import TRON_NETWORK
+
+# 实例检查功能
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("⚠️  psutil库未安装，跳过实例检查功能")
+    print("   可以运行: pip install psutil 来启用自动实例管理")
 
 # 加载环境变量
 load_dotenv()
@@ -18,6 +29,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# 设置httpx库的日志级别为WARNING，忽略INFO级别的HTTP请求日志
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,111 +160,6 @@ async def handle_payment_callback(update: Update, context: ContextTypes.DEFAULT_
         text = generate_buy_energy_text(user_id)
         keyboard = generate_buy_energy_keyboard(user_id)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
-
-async def handle_balance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理余额查询回调"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    await query.answer()
-    
-    # 获取用户会话
-    session = get_user_session(user_id)
-    
-    # 检查用户是否已选择地址
-    if not hasattr(session, 'selected_address') or not session.selected_address:
-        # 用户还没有选择地址，提示选择
-        error_msg = """❌ 请先选择钱包地址
-
-请点击"Receive Address"选择您的钱包地址，然后再查询余额。"""
-        
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🏠 返回主菜单", callback_data="main:home")
-        ]])
-        
-        await query.edit_message_text(error_msg, reply_markup=keyboard, parse_mode='Markdown')
-        return
-    
-    address = session.selected_address
-    
-    # 显示查询中的消息
-    loading_text = f"""🔍 正在查询地址余额...
-
-📍 查询地址: `{address[:6]}...{address[-6:]}`
-
-请稍候..."""
-    await query.edit_message_text(loading_text, parse_mode='Markdown')
-    
-    try:
-        # 创建API客户端并查询余额
-        api = TronAPI(
-            network=TRON_NETWORK,
-            api_key=os.getenv('TRON_API_KEY')
-        )
-        
-        # 查询余额
-        balance = api.get_account_balance(address)
-        
-        if balance:
-            # 查询成功，显示结果
-            message = api.format_balance_message(balance)
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔄 刷新余额", callback_data="main:balance"),
-                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
-            ]])
-            
-            await query.edit_message_text(message, reply_markup=keyboard, parse_mode='Markdown')
-            
-        else:
-            # 查询失败
-            error_msg = f"""❌ 余额查询失败
-
-📍 查询地址: `{address}`
-
-可能的原因：
-• 地址尚未激活（需要先接收一次TRX转账）
-• 网络连接问题
-• API服务暂时不可用
-
-💡 提示：新地址需要先接收至少0.1 TRX才会被激活。"""
-            
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
-                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
-            ]])
-            
-            await query.edit_message_text(error_msg, reply_markup=keyboard, parse_mode='Markdown')
-            
-    except Exception as e:
-        logger.error(f"余额查询异常: {e}")
-        await query.edit_message_text(
-            f"""❌ 查询过程中发生错误
-
-📍 查询地址: `{address}`
-
-请稍后重试，或检查地址是否正确。""",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔄 重试", callback_data="main:balance"),
-                InlineKeyboardButton("🔙 返回闪租页", callback_data="main:buy_energy")
-            ]]),
-            parse_mode='Markdown'
-        )
-
-async def handle_balance_query_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理余额查询相关回调"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    callback_data = query.data
-    
-    await query.answer()
-    
-    if callback_data == "balance:cancel":
-        # 取消余额查询，返回主菜单
-        session = get_user_session(user_id)
-        session.pending_input = None
-        
-        # 调用start_command显示主菜单
-        await start_command_from_callback(query, context)
 
 async def handle_wallet_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理钱包管理主页面"""
@@ -776,8 +685,93 @@ async def setup_bot_commands(application):
     ]
     await application.bot.set_my_commands(commands)
 
+def check_and_kill_existing_instances():
+    """检查并关闭已运行的Bot实例"""
+    if not PSUTIL_AVAILABLE:
+        return True
+    
+    current_pid = os.getpid()
+    current_script = os.path.abspath(__file__)
+    
+    print("🔍 检查运行中的Bot实例...")
+    
+    running_instances = []
+    
+    try:
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                # 跳过当前进程
+                if proc.info['pid'] == current_pid:
+                    continue
+                
+                cmdline = proc.info['cmdline']
+                if not cmdline:
+                    continue
+                
+                # 检查是否是Python进程运行main.py
+                if (len(cmdline) >= 2 and 
+                    ('python' in cmdline[0].lower() or cmdline[0].endswith('python.exe')) and
+                    ('main.py' in ' '.join(cmdline) or current_script in ' '.join(cmdline))):
+                    
+                    running_instances.append(proc.info['pid'])
+                    
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+                
+    except Exception as e:
+        print(f"⚠️  检查进程时出错: {e}")
+        return True  # 继续启动
+    
+    if not running_instances:
+        print("✅ 没有发现运行中的Bot实例")
+        return True
+    
+    print(f"🔴 发现 {len(running_instances)} 个运行中的Bot实例: {running_instances}")
+    print("🛑 正在停止现有实例...")
+    
+    success_count = 0
+    for pid in running_instances:
+        try:
+            proc = psutil.Process(pid)
+            proc.terminate()
+            
+            # 等待进程结束
+            try:
+                proc.wait(timeout=5)
+                success_count += 1
+                print(f"   ✅ 进程 {pid} 已停止")
+            except psutil.TimeoutExpired:
+                # 强制杀死
+                proc.kill()
+                success_count += 1
+                print(f"   ✅ 进程 {pid} 已强制停止")
+                
+        except psutil.NoSuchProcess:
+            success_count += 1
+            print(f"   ✅ 进程 {pid} 已不存在")
+        except Exception as e:
+            print(f"   ❌ 停止进程 {pid} 失败: {e}")
+    
+    if success_count == len(running_instances):
+        print("✅ 所有Bot实例已停止")
+        time.sleep(2)  # 等待进程完全清理
+        return True
+    else:
+        print(f"⚠️  停止了 {success_count}/{len(running_instances)} 个实例，仍将继续启动")
+        return True
+
 def main():
     """主函数"""
+    print("=" * 60)
+    print("🤖 TRON Bot 启动器")
+    print("=" * 60)
+    
+    # 检查并关闭现有实例
+    check_and_kill_existing_instances()
+    
+    print("\n🚀 正在启动新的Bot实例...")
+    print("-" * 60)
+    
     # 首先尝试从环境变量获取Bot Token
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     
@@ -808,14 +802,24 @@ def main():
     application.post_init = post_init
     
     # 启动Bot
-    print("Bot正在启动...")
+    print(f"✅ Bot配置完成，正在连接Telegram...")
+    print(f"📡 网络: {TRON_NETWORK}")
+    print(f"📁 工作目录: {os.getcwd()}")
+    print("-" * 60)
+    print("Bot正在运行中... 按 Ctrl+C 停止")
+    print("=" * 60)
     try:
         application.run_polling(drop_pending_updates=True, close_loop=False)
     except KeyboardInterrupt:
-        print("Bot已停止")
+        print("\n" + "=" * 60)
+        print("🛑 Bot已停止")
+        print("=" * 60)
     except Exception as e:
-        print(f"启动错误: {e}")
-        print("请确保没有其他Bot实例在运行")
+        print(f"\n❌ 启动错误: {e}")
+        print("💡 可能的解决方案:")
+        print("   1. 检查网络连接")
+        print("   2. 验证Bot Token是否正确")
+        print("   3. 确保没有其他Bot实例在运行")
 
 if __name__ == "__main__":
     main()
