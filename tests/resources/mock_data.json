@@ -1,0 +1,98 @@
+{
+  "api_responses": {
+    "balance_success": {
+      "customer": {
+        "trx_balance": 1000.0,
+        "energy_available": 0,
+        "bandwidth_available": 395
+      },
+      "platform": {
+        "trx_balance": 7000.0,
+        "energy_available": 0, 
+        "bandwidth_available": 395
+      },
+      "supplier": {
+        "trx_balance": 2000.0,
+        "energy_available": 0,
+        "bandwidth_available": 395
+      }
+    },
+    "balance_error": {
+      "error": "Network connection failed",
+      "code": "API_ERROR"
+    }
+  },
+  
+  "cost_calculation": {
+    "base_rate": 0.000045,
+    "duration_multipliers": {
+      "1h": 1.0,
+      "1d": 0.8,
+      "3d": 0.7, 
+      "7d": 0.6,
+      "14d": 0.5
+    },
+    "examples": [
+      {
+        "energy": 135000,
+        "duration": "1d",
+        "cost": 4.86,
+        "description": "标准订单示例"
+      },
+      {
+        "energy": 65000,
+        "duration": "1h", 
+        "cost": 2.925,
+        "description": "小额短期订单"
+      },
+      {
+        "energy": 1000000,
+        "duration": "7d",
+        "cost": 27.0,
+        "description": "大额长期订单"
+      }
+    ]
+  },
+  
+  "ui_templates": {
+    "flash_rental_message": [
+      "Calculation of the cost of purchasing energy:",
+      "",
+      "🎯 Address: {address}",
+      "ℹ️ Address balance:",
+      "TRX: {trx_balance}",
+      "ENERGY: {energy_balance}",
+      "BANDWIDTH: {bandwidth_balance}",
+      "",
+      "⚡️ Amount: {energy_amount}",
+      "📆 Period: {duration}",
+      "💵 Cost: {cost} TRX"
+    ],
+    "balance_loading": "🔄 Updating balance…",
+    "balance_error": "❌ Failed to update balance"
+  },
+  
+  "test_scenarios": [
+    {
+      "name": "完整购买流程",
+      "description": "从参数选择到订单确认的完整流程",
+      "steps": [
+        "选择能量数量(135K)",
+        "选择租期(1d)",
+        "选择收款地址",
+        "查询余额",
+        "确认订单"
+      ]
+    },
+    {
+      "name": "地址管理流程",
+      "description": "添加、选择、切换钱包地址",
+      "steps": [
+        "添加新地址",
+        "验证地址格式",
+        "在地址间切换",
+        "删除地址"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "query_time": "2025-09-12T13:25:14.368789",
+  "network": "shasta",
+  "total_wallets": 3,
+  "successful_queries": 3,
+  "failed_queries": 0,
+  "results": [
+    {
+      "wallet_info": {
+        "address": "TCX13dZVJt1uCDCGA3F26KqEndpsSt2CHy",
+        "private_key": "9268f1a74aacd9af82fb29c3761b45fd17b8e8003612646554274302b86d3168",
+        "public_key": "67c4112d077ac35dfd30b55174d2fb25ee9a0581ca65009d2739288bf29b5e56a3fdf079a35ba3e52006f5bb8fc14b5fa27ff1213927b87b1397068685b84d1f",
+        "created_at": "2025-09-11T01:09:19.069938",
+        "network": "Shasta Testnet"
+      },
+      "balance_info": {
+        "trx_balance": 1000.0,
+        "usdt_balance": 5000.0,
+        "energy_limit": 0,
+        "energy_used": 0,
+        "energy_available": 0,
+        "bandwidth_limit": 660,
+        "bandwidth_used": 0,
+        "bandwidth_available": 660,
+        "free_net_limit": 600,
+        "free_net_used": 0
+      },
+      "query_time": "2025-09-12T13:25:09.507952",
+      "network": "shasta",
+      "status": "success"
+    },
+    {
+      "wallet_info": {
+        "address": "TAcrAuU78UyPZpZuVPCQo2ZVcfwmkskWLz",
+        "private_key": "0092da9cc83aff0814632e341186399b30b67617c35668b6501e59b9bb146417",
+        "public_key": "a1b6b98ea1565ab3528f8212d5bf433ba480602f31d46e122074e784b6dafe923b45b2f1c410e872fb4a0a3f9faea4ff1254ea406966851c52bc64e35c9306c4",
+        "created_at": "2025-09-11T01:09:19.069938",
+        "network": "Shasta Testnet"
+      },
+      "balance_info": {
+        "trx_balance": 7000.0,
+        "usdt_balance": 0.0,
+        "energy_limit": 0,
+        "energy_used": 0,
+        "energy_available": 0,
+        "bandwidth_limit": 600,
+        "bandwidth_used": 0,
+        "bandwidth_available": 600,
+        "free_net_limit": 600,
+        "free_net_used": 0
+      },
+      "query_time": "2025-09-12T13:25:11.866384",
+      "network": "shasta",
+      "status": "success"
+    },
+    {
+      "wallet_info": {
+        "address": "TVAcKMkSvL8Jbf58AKLnWFesYjiznNUnr4",
+        "private_key": "c87e954fe8dd2c55d75bfb6e5db1add7cb55a0931376e085a9e78a061f7983a1",
+        "public_key": "2204676f2cbb4eaa7a016dc1a83ca506c55325b16ef09eebceb167e4011575b1a631754e80c1cee90b88402bf558b912c085f968e043c90aa53a19ae550f23a9",
+        "created_at": "2025-09-11T01:09:19.069938",
+        "network": "Shasta Testnet"
+      },
+      "balance_info": {
+        "trx_balance": 2000.0,
+        "usdt_balance": 0.0,
+        "energy_limit": 0,
+        "energy_used": 0,
+        "energy_available": 0,
+        "bandwidth_limit": 600,
+        "bandwidth_used": 0,
+        "bandwidth_available": 600,
+        "free_net_limit": 600,
+        "free_net_used": 0
+      },
+      "query_time": "2025-09-12T13:25:14.368789",
+      "network": "shasta",
+      "status": "success"
+    }
+  ]
+}

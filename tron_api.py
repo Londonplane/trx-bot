@@ -21,13 +21,34 @@ class AccountBalance:
 class TronAPI:
     """TRON API客户端"""
     
-    def __init__(self, api_url: str = "https://api.trongrid.io", api_key: Optional[str] = None):
-        self.api_url = api_url.rstrip('/')
+    def __init__(self, api_url: str = "https://api.trongrid.io", api_key: Optional[str] = None, network: str = "mainnet"):
+        """
+        初始化TRON API客户端
+        
+        Args:
+            api_url: API地址，默认为主网
+            api_key: API密钥（可选）
+            network: 网络类型 ("mainnet", "shasta", "nile")
+        """
+        # 根据网络类型设置API URL
+        if network.lower() == "shasta":
+            self.api_url = "https://api.shasta.trongrid.io"
+            self.tronscan_url = "https://shastapi.tronscan.org"
+        elif network.lower() == "nile":
+            self.api_url = "https://nile.trongrid.io"  
+            self.tronscan_url = "https://nileapi.tronscan.org"
+        else:
+            # 主网
+            self.api_url = api_url.rstrip('/')
+            self.tronscan_url = "https://apilist.tronscan.org"
+        
+        self.network = network.lower()
         self.headers = {'Content-Type': 'application/json'}
         if api_key:
             self.headers['TRON-PRO-API-KEY'] = api_key
         
         self.logger = logging.getLogger(__name__)
+        self.logger.info(f"初始化TRON API客户端 - 网络: {self.network}, URL: {self.api_url}")
     
     def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """发起API请求"""
@@ -111,8 +132,10 @@ class TronAPI:
     def get_account_balance_tronscan(self, address: str) -> Optional[AccountBalance]:
         """使用TronScan API获取账户余额（备用方案）"""
         try:
-            url = f"https://apilist.tronscan.org/api/account?address={address}&includeToken=false"
+            url = f"{self.tronscan_url}/api/account?address={address}&includeToken=false"
             headers = {"accept": "application/json"}
+            
+            self.logger.debug(f"TronScan查询URL: {url}")
             
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
@@ -157,7 +180,7 @@ class TronAPI:
                 free_net_used=free_bandwidth_used
             )
             
-            self.logger.info(f"TronScan查询成功: TRX={trx_balance:.6f}")
+            self.logger.info(f"TronScan查询成功 ({self.network}): TRX={trx_balance:.6f}")
             return balance
             
         except Exception as e:
@@ -270,14 +293,26 @@ if __name__ == "__main__":
     # 测试代码
     logging.basicConfig(level=logging.INFO)
     
-    api = TronAPI()
-    
-    # 使用一个已知的TRON地址进行测试
-    test_address = "TLPpXqEnbRvKuE7CyxSvWtSyJhJnBJKNDj"
-    
-    balance = api.get_account_balance(test_address)
-    if balance:
-        print("✅ 余额查询成功!")
-        print(api.format_balance_message(balance))
+    # 测试主网
+    print("测试主网...")
+    api_mainnet = TronAPI(network="mainnet")
+    test_address_mainnet = "TLPpXqEnbRvKuE7CyxSvWtSyJhJnBJKNDj"
+    balance_mainnet = api_mainnet.get_account_balance(test_address_mainnet)
+    if balance_mainnet:
+        print("✅ 主网余额查询成功!")
+        print(api_mainnet.format_balance_message(balance_mainnet))
     else:
-        print("❌ 余额查询失败!")
+        print("❌ 主网余额查询失败!")
+    
+    print("\n" + "="*60 + "\n")
+    
+    # 测试Shasta测试网
+    print("测试Shasta测试网...")
+    api_shasta = TronAPI(network="shasta")
+    test_address_shasta = "TYjwikHnA2VvEcCgyQNGkVpiTYxZoDXtyQ"  # 示例Shasta地址
+    balance_shasta = api_shasta.get_account_balance(test_address_shasta)
+    if balance_shasta:
+        print("✅ Shasta测试网余额查询成功!")
+        print(api_shasta.format_balance_message(balance_shasta))
+    else:
+        print("❌ Shasta测试网余额查询失败!")

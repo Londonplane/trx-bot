@@ -1,0 +1,47 @@
+{
+  "test_time": "2025-09-12T12:25:00Z",
+  "network": "shasta",
+  "api_url": "https://api.shasta.trongrid.io",
+  "tronscan_url": "https://shastapi.tronscan.org",
+  "results": [
+    {
+      "wallet": 1,
+      "address": "TCX13dZVJt1uCDCGA3F26KqEndpsSt2CHy",
+      "valid": true,
+      "balance": {
+        "trx": 1000.0,
+        "energy": 0,
+        "bandwidth": 660
+      },
+      "error": null
+    },
+    {
+      "wallet": 2,
+      "address": "TAcrAuU78UyPZpZuVPCQo2ZVcfwmkskWLz",
+      "valid": true,
+      "balance": {
+        "trx": 7000.0,
+        "energy": 0,
+        "bandwidth": 600
+      },
+      "error": null
+    },
+    {
+      "wallet": 3,
+      "address": "TVAcKMkSvL8Jbf58AKLnWFesYjiznNUnr4",
+      "valid": true,
+      "balance": {
+        "trx": 2000.0,
+        "energy": 0,
+        "bandwidth": 600
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "successful": 3,
+    "failed": 0,
+    "success_rate": 100.0
+  }
+}

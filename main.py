@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from tron_api import TronAPI
 from models import get_user_session, format_energy
 from buy_energy import handle_buy_energy_callback, generate_buy_energy_text, generate_buy_energy_keyboard
+from config import TRON_NETWORK
 
 # 加载环境变量
 load_dotenv()
@@ -183,7 +184,7 @@ async def handle_balance_callback(update: Update, context: ContextTypes.DEFAULT_
     try:
         # 创建API客户端并查询余额
         api = TronAPI(
-            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            network=TRON_NETWORK,
             api_key=os.getenv('TRON_API_KEY')
         )
         
@@ -426,7 +427,7 @@ async def show_address_details(query, context, address):
         from tron_api import TronAPI
         import os
         api = TronAPI(
-            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            network=TRON_NETWORK,
             api_key=os.getenv('TRON_API_KEY')
         )
         
@@ -489,7 +490,7 @@ async def refresh_wallet_address_balance(query, context, address):
         from tron_api import TronAPI
         import os
         api = TronAPI(
-            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            network=TRON_NETWORK,
             api_key=os.getenv('TRON_API_KEY')
         )
         
@@ -638,7 +639,7 @@ async def handle_balance_query(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # 验证地址格式
     api = TronAPI(
-        api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+        network=TRON_NETWORK,
         api_key=os.getenv('TRON_API_KEY')
     )
     

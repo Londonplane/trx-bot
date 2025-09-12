@@ -4,6 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from models import get_user_session, calculate_mock_cost, format_energy, get_wallet_addresses, add_wallet_address
 from tron_api import TronAPI
+from config import TRON_NETWORK
 
 def generate_buy_energy_text(user_id: int) -> str:
     """生成闪租页文本内容"""
@@ -310,7 +311,7 @@ async def refresh_address_balance(query, context):
     try:
         # 创建API客户端
         api = TronAPI(
-            api_url=os.getenv('TRON_API_URL', 'https://api.trongrid.io'),
+            network=TRON_NETWORK,
             api_key=os.getenv('TRON_API_KEY')
         )
         

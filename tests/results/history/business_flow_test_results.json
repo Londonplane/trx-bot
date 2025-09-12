@@ -1,0 +1,157 @@
+{
+  "start_time": "2025-09-12T15:32:04.782599",
+  "tests": [
+    {
+      "test_name": "后端健康检查",
+      "status": "PASS",
+      "details": "服务正常运行，状态：healthy",
+      "timestamp": "2025-09-12T15:32:06.815579"
+    },
+    {
+      "test_name": "钱包A余额查询",
+      "status": "PASS",
+      "details": "TRX: 1000.0, Energy: 0, Bandwidth: 660",
+      "timestamp": "2025-09-12T15:32:07.810859",
+      "expected": 1000.0,
+      "actual": 1000.0
+    },
+    {
+      "test_name": "订单成本计算",
+      "status": "PASS",
+      "details": "135K能量1天费用：4.86 TRX (Mock数据)",
+      "timestamp": "2025-09-12T15:32:07.810859"
+    },
+    {
+      "test_name": "余额充足性验证",
+      "status": "PASS",
+      "details": "顾客余额1000.0 TRX >= 订单费用4.86 TRX",
+      "timestamp": "2025-09-12T15:32:07.810859"
+    },
+    {
+      "test_name": "订单生成功能",
+      "status": "SKIP",
+      "details": "当前系统未实现链上交易功能，需要开发",
+      "timestamp": "2025-09-12T15:32:07.810859"
+    },
+    {
+      "test_name": "钱包A余额查询",
+      "status": "PASS",
+      "details": "TRX: 1000.0, Energy: 0, Bandwidth: 660",
+      "timestamp": "2025-09-12T15:32:08.619751",
+      "expected": 1000.0,
+      "actual": 1000.0
+    },
+    {
+      "test_name": "钱包B余额查询",
+      "status": "PASS",
+      "details": "TRX: 7000.0, Energy: 0, Bandwidth: 600",
+      "timestamp": "2025-09-12T15:32:09.621373",
+      "expected": 7000.0,
+      "actual": 7000.0
+    },
+    {
+      "test_name": "钱包C余额查询",
+      "status": "PASS",
+      "details": "TRX: 2000.0, Energy: 0, Bandwidth: 600",
+      "timestamp": "2025-09-12T15:32:10.747161",
+      "expected": 2000.0,
+      "actual": 2000.0
+    },
+    {
+      "test_name": "三方交易流程限制",
+      "status": "SKIP",
+      "details": "TRX转账功能未实现 - 需要集成私钥签名和链上交易",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "三方交易流程限制",
+      "status": "SKIP",
+      "details": "能量转移功能未实现 - 需要实现Energy Delegation机制",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "三方交易流程限制",
+      "status": "SKIP",
+      "details": "订单状态管理未完善 - 需要完整的订单生命周期管理",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "三方交易流程限制",
+      "status": "SKIP",
+      "details": "支付确认机制未实现 - 需要监听区块链交易确认",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "理想交易流程设计",
+      "status": "INFO",
+      "details": "三方交易流程已设计，等待功能实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-钱包地址管理",
+      "status": "PASS",
+      "details": "功能已实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-余额查询功能",
+      "status": "PASS",
+      "details": "功能已实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-闪租页面界面",
+      "status": "PASS",
+      "details": "功能已实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-参数选择功能",
+      "status": "PASS",
+      "details": "功能已实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-成本计算逻辑",
+      "status": "PARTIAL",
+      "details": "使用Mock数据",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-订单生成功能",
+      "status": "FAIL",
+      "details": "功能未实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-TRX转账功能",
+      "status": "FAIL",
+      "details": "功能未实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-能量转移功能",
+      "status": "FAIL",
+      "details": "功能未实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-支付确认机制",
+      "status": "FAIL",
+      "details": "功能未实现",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    },
+    {
+      "test_name": "功能评估-订单状态跟踪",
+      "status": "PARTIAL",
+      "details": "基础功能存在",
+      "timestamp": "2025-09-12T15:32:10.747161"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 12,
+    "total": 23
+  },
+  "end_time": "2025-09-12T15:32:10.748227"
+}

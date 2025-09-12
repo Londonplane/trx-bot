@@ -1,0 +1,41 @@
+{
+  "generated_at": "2025-09-12T00:00:00.000000",
+  "network": "Shasta Testnet",
+  "business_model": "三方交易模型：顾客→平台→供应商",
+  "total_wallets": 3,
+  "wallets": [
+    {
+      "id": "customer",
+      "name": "顾客钱包A",
+      "address": "TCX13dZVJt1uCDCGA3F26KqEndpsSt2CHy",
+      "private_key": "9268f1a74aacd9af82fb29c3761b45fd17b8e8003612646554274302b86d3168",
+      "role": "支付TRX购买能量服务",
+      "expected_balance": 1000.0,
+      "network": "Shasta Testnet"
+    },
+    {
+      "id": "platform", 
+      "name": "平台钱包B",
+      "address": "TAcrAuU78UyPZpZuVPCQo2ZVcfwmkskWLz",
+      "private_key": "0092da9cc83aff0814632e341186399b30b67617c35668b6501e59b9bb146417",
+      "role": "接收顾客支付，处理订单管理",
+      "expected_balance": 7000.0,
+      "network": "Shasta Testnet"
+    },
+    {
+      "id": "supplier",
+      "name": "供应商钱包C", 
+      "address": "TVAcKMkSvL8Jbf58AKLnWFesYjiznNUnr4",
+      "private_key": "c87e954fe8dd2c55d75bfb6e5db1add7cb55a0931376e085a9e78a061f7983a1",
+      "role": "向顾客提供能量服务",
+      "expected_balance": 2000.0,
+      "network": "Shasta Testnet"
+    }
+  ],
+  "notes": [
+    "这些是Shasta测试网钱包，仅用于测试",
+    "私钥信息敏感，请妥善保管",
+    "可通过 @TronTest2 推特获取免费测试TRX",
+    "测试网地址: https://shasta.tronex.io/"
+  ]
+}

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class BackendAPIClient:
     """后端API客户端"""
     
-    def __init__(self, base_url: str = "http://localhost:8001"):
+    def __init__(self, base_url: str = "http://localhost:8002"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({

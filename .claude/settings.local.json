@@ -4,7 +4,15 @@
       "Bash(docker compose:*)",
       "Bash(curl:*)",
       "Bash(move:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npm --version)",
+      "Bash(claude --version)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "WebSearch",
+      "mcp__context7__resolve-library-id",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }
