@@ -1,10 +1,16 @@
+# -*- coding: utf-8 -*-
+import sys
+import os
+# 添加父目录到 Python 路径以便导入编码修复模块
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import encoding_fix  # 必须在最开始导入，修复Windows编码问题
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.api import orders, users, wallets, supplier_wallets
 from app.database import engine, Base
 import logging
-import os
 
 # 配置日志
 logging.basicConfig(

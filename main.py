@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+import encoding_fix  # 必须在最开始导入，修复Windows编码问题
 import logging
 import asyncio
 import os
@@ -710,10 +712,11 @@ def check_and_kill_existing_instances():
                 if not cmdline:
                     continue
                 
-                # 检查是否是Python进程运行main.py
+                # 检查是否是Python进程运行当前Bot脚本
+                # 只杀死运行相同脚本文件的进程，不影响backend/main.py
                 if (len(cmdline) >= 2 and 
                     ('python' in cmdline[0].lower() or cmdline[0].endswith('python.exe')) and
-                    ('main.py' in ' '.join(cmdline) or current_script in ' '.join(cmdline))):
+                    current_script in ' '.join(cmdline)):
                     
                     running_instances.append(proc.info['pid'])
                     
@@ -768,8 +771,12 @@ def main():
     print("🤖 TRON Bot 启动器")
     print("=" * 60)
     
-    # 检查并关闭现有实例
-    check_and_kill_existing_instances()
+    # 如果是通过launcher启动，跳过进程检查
+    if os.getenv('DISABLE_PROCESS_CHECK') != '1':
+        # 检查并关闭现有实例
+        check_and_kill_existing_instances()
+    else:
+        print("🔧 Launcher模式：跳过进程检查")
     
     print("\n🚀 正在启动新的Bot实例...")
     print("-" * 60)

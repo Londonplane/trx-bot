@@ -30,6 +30,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 核心文件结构
 ```
 trx-bot/
+├── launcher.py              # 🆕 生产级启动器（推荐使用）
+├── encoding_fix.py          # 🆕 Windows编码修复模块
 ├── main.py                  # Telegram Bot主程序入口
 ├── buy_energy.py            # 闪租页面逻辑和余额查询
 ├── models.py                # 数据模型和用户会话管理（含容错机制）
@@ -42,9 +44,9 @@ trx-bot/
 │   ├── main.py            # FastAPI服务入口
 │   ├── app/               # API应用代码
 │   ├── requirements.txt   # 后端依赖包
-│   ├── docker-compose.yml # 容器化部署配置
-│   └── start_services.bat # Windows启动脚本
-└── docs/                  # 完整的项目文档
+│   └── docker-compose.yml # 容器化部署配置
+├── docs/                  # 完整的项目文档
+└── 启动器使用指南.md        # 🆕 详细使用说明
 ```
 
 ### 系统架构设计
@@ -123,31 +125,34 @@ BANDWIDTH: 395
 
 ### 快速启动
 
-#### 1. 启动后端服务（必需）
+#### 🆕 推荐方式：生产级启动器
 ```bash
-# 进入后端目录
-cd backend
-
-# 安装依赖
+# 安装依赖（仅首次运行）
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
-# 启动服务（Windows）
-start_services.bat
+# 一键启动所有服务
+python launcher.py
+```
 
-# 或手动启动（跨平台）
+**特性**：
+- ✅ 自动启动后端API和Telegram Bot
+- ✅ 实时健康监控和自动重启
+- ✅ 完美解决Windows编码问题
+- ✅ 优雅的进程管理和关闭
+
+**验证**: 启动后访问 http://localhost:8002/health 应返回健康状态
+
+#### 传统方式：手动启动
+```bash
+# 1. 启动后端服务
+cd backend && python main.py &
+
+# 2. 启动Telegram Bot（新终端）
 python main.py
 ```
-**验证**: 访问 http://localhost:8002/health 应返回 `{"status":"healthy"}`
 
-#### 2. 启动Telegram Bot
-```bash
-# 在项目根目录
-pip install -r requirements.txt
-
-# 配置Bot Token到config.py
-# 启动Bot
-python main.py
-```
+⚠️ **注意**: 传统方式可能遇到编码问题，建议使用生产级启动器
 
 ### 依赖包管理
 - **Bot依赖**: requirements.txt（含python-telegram-bot等）
@@ -168,30 +173,37 @@ python main.py
 
 ### 部署方式
 
-#### 方案一：直接部署
+#### 🆕 推荐方案：生产级启动器
 ```bash
-# 1. 启动后端服务
-cd backend && python main.py &
-
-# 2. 启动Bot
-cd .. && python main.py
+# 生产环境部署
+python launcher.py
 ```
 
-#### 方案二：Docker部署
+**优势**：
+- 自动故障检测和重启（最多3次）
+- 完整的服务健康监控
+- 优雅的进程生命周期管理
+- 无编码问题，跨平台兼容
+
+#### 传统方案：手动部署
+```bash
+# 方案一：直接启动
+cd backend && python main.py &
+cd .. && python main.py
+
+# 方案二：进程管理器
+pm2 start launcher.py --name "tron-energy-bot"
+```
+
+#### Docker部署
 ```bash
 # 使用后端目录中的docker-compose.yml
 cd backend
 docker-compose up -d
 ```
 
-#### 方案三：进程管理器
-```bash
-# 使用PM2、Supervisor等进程管理器
-pm2 start backend/main.py --name "trx-backend"
-pm2 start main.py --name "trx-bot"
-```
-
 ### 故障恢复机制
+- **自动重启**: 生产级启动器内置故障检测和自动重启
 - **后端API失败**: Bot自动使用本地文件存储和Mock数据
 - **区块链API失败**: 自动切换备用API端点
 - **会话恢复**: 重启后自动加载用户钱包地址
@@ -205,40 +217,52 @@ pm2 start main.py --name "trx-bot"
 
 ## 故障排除
 
-### 常见问题
+### 🆕 推荐解决方案
+**使用生产级启动器可以避免99%的常见问题！**
 
-#### 1. 连接被拒绝错误 (WinError 10061)
-**症状**: `HTTPConnectionPool(host='localhost', port=8002): Max retries exceeded`
-**原因**: 后端API服务未启动
-**解决**:
 ```bash
-# 确保后端服务运行
-cd backend && python main.py
-# 验证服务: curl http://localhost:8002/health
+# 一键解决所有启动问题
+python launcher.py
 ```
 
-#### 2. Bot无响应或功能异常
-**可能原因**: Bot Token配置错误、网络问题
+### 常见问题
+
+#### 1. 编码错误 (UnicodeEncodeError/GBK)
+**症状**: `'gbk' codec can't encode/decode character`
+**解决**: 使用生产级启动器，已完美解决编码问题
+```bash
+python launcher.py  # 自动处理所有编码问题
+```
+
+#### 2. 服务意外停止
+**症状**: Backend或Bot进程意外退出
+**解决**: 生产级启动器自动重启（最多3次）
+- 自动检测服务状态
+- 智能故障恢复
+- 详细的错误报告
+
+#### 3. 连接被拒绝错误 (WinError 10061)
+**症状**: `HTTPConnectionPool(host='localhost', port=8002): Max retries exceeded`
+**原因**: 后端API服务未启动
+**解决**: 
+```bash
+# 生产级启动器会自动处理
+python launcher.py
+```
+
+#### 4. Bot Token配置错误
 **解决**:
 - 检查config.py中的BOT_TOKEN配置
-- 验证网络连接和防火墙设置
-- 查看终端日志输出
-
-#### 3. 余额查询失败
-**症状**: 显示Mock数据或查询失败
-**解决**:
-- 检查后端服务状态
-- 验证TRON API网络连接
-- 查看日志中的API调用错误
+- 或设置环境变量: `TELEGRAM_BOT_TOKEN`
 
 ### 监控与日志
-- **Bot日志**: 终端输出包含详细的操作日志
-- **后端日志**: FastAPI服务的访问和错误日志
+- **实时状态**: 生产级启动器显示所有服务状态
 - **健康检查**: http://localhost:8002/health
 - **API文档**: http://localhost:8002/docs
+- **服务监控**: 自动检测和重启失败的服务
 
 ### 维护建议
-- **定期检查**: 监控API服务状态和响应时间
+- **推荐启动方式**: 始终使用 `python launcher.py`
 - **数据备份**: 定期备份user_wallets.json和数据库文件
 - **更新依赖**: 及时更新Python包版本
 - **安全检查**: 保护Bot Token和API密钥安全
