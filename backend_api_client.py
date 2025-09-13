@@ -73,7 +73,7 @@ class BackendAPIClient:
             "duration": duration,
             "receive_address": receive_address
         }
-        return self._make_request("POST", "/api/orders", data)
+        return self._make_request("POST", "/api/orders/", data)
     
     def get_order(self, order_id: str) -> Optional[Dict]:
         """查询订单详情"""
