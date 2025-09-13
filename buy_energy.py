@@ -63,6 +63,7 @@ def generate_buy_energy_text(user_id: int) -> str:
         if hasattr(session, 'address_balance') and session.address_balance:
             address_section += f"ℹ️ Address balance:\n"
             address_section += f"TRX: {session.address_balance.get('TRX', '0')}\n"
+            address_section += f"USDT: {session.address_balance.get('USDT', '0.00')}\n"
             address_section += f"ENERGY: {session.address_balance.get('ENERGY', '0')}\n"
             # 显示带宽信息（如果有的话）
             bandwidth = session.address_balance.get('BANDWIDTH')
@@ -328,9 +329,10 @@ async def refresh_address_balance(query, context):
         balance = api.get_account_balance(session.selected_address)
         
         if balance:
-            # 更新会话中的余额信息，包含带宽
+            # 更新会话中的余额信息，包含USDT和带宽
             session.address_balance = {
                 'TRX': f"{balance.trx_balance:.6f}",
+                'USDT': f"{balance.usdt_balance:.6f}",
                 'ENERGY': f"{balance.energy_available:,}",
                 'BANDWIDTH': f"{balance.bandwidth_available:,}"
             }

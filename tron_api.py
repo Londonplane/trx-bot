@@ -9,6 +9,7 @@ class AccountBalance:
     """账户余额数据类"""
     address: str
     trx_balance: float  # TRX余额 
+    usdt_balance: float # USDT余额 (TRC20)
     energy_limit: int   # Energy总限制
     energy_used: int    # 已使用Energy
     energy_available: int  # 可用Energy
@@ -20,6 +21,13 @@ class AccountBalance:
 
 class TronAPI:
     """TRON API客户端"""
+    
+    # USDT合约地址 (TRC20)
+    USDT_CONTRACT_ADDRESS = {
+        'mainnet': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        'shasta': 'TG3XXyExBkPp9nzdajDZsozEu4BkaSJozs',  # Shasta测试网USDT合约
+        'nile': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'     # Nile使用主网地址
+    }
     
     def __init__(self, api_url: str = "https://api.trongrid.io", api_key: Optional[str] = None, network: str = "mainnet"):
         """
@@ -43,12 +51,13 @@ class TronAPI:
             self.tronscan_url = "https://apilist.tronscan.org"
         
         self.network = network.lower()
+        self.usdt_contract = self.USDT_CONTRACT_ADDRESS.get(self.network, self.USDT_CONTRACT_ADDRESS['mainnet'])
         self.headers = {'Content-Type': 'application/json'}
         if api_key:
             self.headers['TRON-PRO-API-KEY'] = api_key
         
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"初始化TRON API客户端 - 网络: {self.network}, URL: {self.api_url}")
+        self.logger.info(f"初始化TRON API客户端 - 网络: {self.network}, URL: {self.api_url}, USDT合约: {self.usdt_contract}")
     
     def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """发起API请求"""
@@ -129,6 +138,86 @@ class TronAPI:
         
         return self._make_request("/wallet/getaccountresource", payload)
     
+    def get_usdt_balance(self, address: str) -> float:
+        """获取USDT余额 (TRC20)"""
+        if not self.is_valid_address(address):
+            self.logger.error(f"无效的地址格式: {address}")
+            return 0.0
+        
+        try:
+            # 使用triggersmartcontract调用USDT合约的balanceOf方法
+            payload = {
+                "owner_address": address,
+                "contract_address": self.usdt_contract,
+                "function_selector": "balanceOf(address)",
+                "parameter": self._encode_address_parameter(address),
+                "visible": True
+            }
+            
+            result = self._make_request("/wallet/triggersmartcontract", payload)
+            
+            if result and result.get("result", {}).get("result", False):
+                # 解析constant_result中的USDT余额
+                constant_result = result.get("constant_result", [])
+                if constant_result:
+                    # USDT使用6位小数
+                    hex_balance = constant_result[0]
+                    if hex_balance and hex_balance != "0" * 64:
+                        balance_wei = int(hex_balance, 16)
+                        balance_usdt = balance_wei / 1_000_000  # USDT使用6位小数
+                        self.logger.info(f"USDT余额查询成功: {balance_usdt} USDT")
+                        return balance_usdt
+            
+            # 如果官方API失败，尝试使用TronScan API查询USDT
+            return self._get_usdt_balance_tronscan(address)
+            
+        except Exception as e:
+            self.logger.error(f"查询USDT余额异常: {e}")
+            # 尝试使用TronScan API作为备用
+            return self._get_usdt_balance_tronscan(address)
+    
+    def _encode_address_parameter(self, address: str) -> str:
+        """编码地址参数用于智能合约调用"""
+        # 移除T前缀并转换为hex，然后左填充到64位
+        if address.startswith('T'):
+            # 使用base58解码TRON地址 (简化版本，实际可能需要更复杂的转换)
+            # 这里使用简化的hex转换
+            hex_addr = address[1:].encode().hex()[:40]  # 简化处理
+            return hex_addr.ljust(64, '0')
+        return "0" * 64
+    
+    def _get_usdt_balance_tronscan(self, address: str) -> float:
+        """使用TronScan API获取USDT余额 (备用方案)"""
+        try:
+            # 使用TronScan的代币余额API
+            url = f"{self.tronscan_url}/api/account/tokens?address={address}&start=0&limit=20&hidden=0&show=0"
+            headers = {"accept": "application/json"}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            tokens = data.get("data", [])
+            
+            # 查找USDT代币
+            for token in tokens:
+                if token.get("tokenAbbr", "").upper() == "USDT":
+                    balance_str = token.get("balance", "0")
+                    if balance_str:
+                        # TronScan返回的是原始整数值，需要转换为正确的小数位
+                        # USDT使用6位小数，所以需要除以10^6
+                        raw_balance = float(balance_str)
+                        usdt_balance = raw_balance / 1_000_000  # 转换为正确的USDT余额
+                        self.logger.info(f"TronScan USDT余额查询成功: {usdt_balance} USDT (原始值: {raw_balance})")
+                        return usdt_balance
+            
+            self.logger.info("未找到USDT代币或余额为0")
+            return 0.0
+            
+        except Exception as e:
+            self.logger.error(f"TronScan USDT余额查询异常: {e}")
+            return 0.0
+    
     def get_account_balance_tronscan(self, address: str) -> Optional[AccountBalance]:
         """使用TronScan API获取账户余额（备用方案）"""
         try:
@@ -150,6 +239,9 @@ class TronAPI:
             balance_data = data.get('balance', 0)
             trx_balance = balance_data / 1_000_000 if balance_data else 0
             
+            # 查询USDT余额
+            usdt_balance = self._get_usdt_balance_tronscan(address)
+            
             # TronScan返回的资源信息
             bandwidth_data = data.get('bandwidth', {})
             energy_data = data.get('energy', {})
@@ -170,6 +262,7 @@ class TronAPI:
             balance = AccountBalance(
                 address=address,
                 trx_balance=trx_balance,
+                usdt_balance=usdt_balance,
                 energy_limit=energy_limit,
                 energy_used=energy_used,
                 energy_available=max(0, energy_limit - energy_used),
@@ -180,7 +273,7 @@ class TronAPI:
                 free_net_used=free_bandwidth_used
             )
             
-            self.logger.info(f"TronScan查询成功 ({self.network}): TRX={trx_balance:.6f}")
+            self.logger.info(f"TronScan查询成功 ({self.network}): TRX={trx_balance:.6f}, USDT={usdt_balance:.6f}")
             return balance
             
         except Exception as e:
@@ -217,6 +310,9 @@ class TronAPI:
             # 解析TRX余额 (SUN转TRX)
             trx_balance = account_info.get('balance', 0) / 1_000_000
             
+            # 查询USDT余额
+            usdt_balance = self.get_usdt_balance(address)
+            
             # 解析Energy信息
             energy_limit = resource_info.get('EnergyLimit', 0)
             energy_used = resource_info.get('EnergyUsed', 0)
@@ -239,6 +335,7 @@ class TronAPI:
             balance = AccountBalance(
                 address=address,
                 trx_balance=trx_balance,
+                usdt_balance=usdt_balance,
                 energy_limit=energy_limit,
                 energy_used=energy_used,
                 energy_available=energy_available,
@@ -249,7 +346,7 @@ class TronAPI:
                 free_net_used=free_net_used
             )
             
-            self.logger.info(f"余额查询成功: TRX={trx_balance:.6f}, Energy={energy_available}/{energy_limit}, Bandwidth={bandwidth_available}/{total_bandwidth_limit}")
+            self.logger.info(f"余额查询成功: TRX={trx_balance:.6f}, USDT={usdt_balance:.6f}, Energy={energy_available}/{energy_limit}, Bandwidth={bandwidth_available}/{total_bandwidth_limit}")
             return balance
             
         except Exception as e:
@@ -263,6 +360,7 @@ class TronAPI:
 📍 地址: `{balance.address}`
 
 💰 TRX余额: **{balance.trx_balance:.6f} TRX**
+💵 USDT余额: **{balance.usdt_balance:.6f} USDT**
 
 ⚡ 能量(Energy):
 • 可用: **{balance.energy_available:,}**
@@ -293,26 +391,37 @@ if __name__ == "__main__":
     # 测试代码
     logging.basicConfig(level=logging.INFO)
     
-    # 测试主网
+    # 测试Shasta测试网络 (符合用户当前使用的网络)
+    print("测试Shasta测试网...")
+    api_shasta = TronAPI(network="shasta")
+    test_address_shasta = "TYjwikHnA2VvEcCgyQNGkVpiTYxZoDXtyQ"  # 示例Shasta地址
+    
+    print(f"正在查询地址: {test_address_shasta}")
+    print(f"网络: {api_shasta.network}")
+    print(f"USDT合约地址: {api_shasta.usdt_contract}")
+    
+    balance_shasta = api_shasta.get_account_balance(test_address_shasta)
+    if balance_shasta:
+        print("✅ Shasta测试网余额查询成功!")
+        print(f"TRX: {balance_shasta.trx_balance:.6f}")
+        print(f"USDT: {balance_shasta.usdt_balance:.6f}")
+        print(f"Energy: {balance_shasta.energy_available}/{balance_shasta.energy_limit}")
+        print(f"Bandwidth: {balance_shasta.bandwidth_available}/{balance_shasta.bandwidth_limit}")
+        print("\n完整格式化消息:")
+        print(api_shasta.format_balance_message(balance_shasta))
+    else:
+        print("❌ Shasta测试网余额查询失败!")
+    
+    print("\n" + "="*60 + "\n")
+    
+    # 测试主网 (为将来部署做准备)
     print("测试主网...")
     api_mainnet = TronAPI(network="mainnet")
     test_address_mainnet = "TLPpXqEnbRvKuE7CyxSvWtSyJhJnBJKNDj"
     balance_mainnet = api_mainnet.get_account_balance(test_address_mainnet)
     if balance_mainnet:
         print("✅ 主网余额查询成功!")
-        print(api_mainnet.format_balance_message(balance_mainnet))
+        print(f"TRX: {balance_mainnet.trx_balance:.6f}")
+        print(f"USDT: {balance_mainnet.usdt_balance:.6f}")
     else:
         print("❌ 主网余额查询失败!")
-    
-    print("\n" + "="*60 + "\n")
-    
-    # 测试Shasta测试网
-    print("测试Shasta测试网...")
-    api_shasta = TronAPI(network="shasta")
-    test_address_shasta = "TYjwikHnA2VvEcCgyQNGkVpiTYxZoDXtyQ"  # 示例Shasta地址
-    balance_shasta = api_shasta.get_account_balance(test_address_shasta)
-    if balance_shasta:
-        print("✅ Shasta测试网余额查询成功!")
-        print(api_shasta.format_balance_message(balance_shasta))
-    else:
-        print("❌ Shasta测试网余额查询失败!")

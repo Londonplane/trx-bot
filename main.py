@@ -350,6 +350,7 @@ async def show_address_details(query, context, address):
 
 💰 余额信息:
 TRX: {balance.trx_balance:.6f}
+USDT: {balance.usdt_balance:.6f}
 ENERGY: {balance.energy_available:,}
 BANDWIDTH: {balance.bandwidth_available:,}"""
         else:
@@ -413,6 +414,7 @@ async def refresh_wallet_address_balance(query, context, address):
 
 💰 余额信息:
 TRX: {balance.trx_balance:.6f}
+USDT: {balance.usdt_balance:.6f}
 ENERGY: {balance.energy_available:,}
 BANDWIDTH: {balance.bandwidth_available:,}
 
